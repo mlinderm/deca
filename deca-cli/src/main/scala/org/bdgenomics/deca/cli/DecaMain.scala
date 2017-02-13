@@ -42,7 +42,7 @@ private class DecaMain(args: Array[String]) extends Logging {
 
   private def printCommands() {
     println()
-    println("Usage: avocado-submit [<spark-args> --] <avocado-args> [-version]")
+    println("Usage: deca-submit [<spark-args> --] <deca-args> [-version]")
     println()
     println("Choose one of the following commands:")
     println()
