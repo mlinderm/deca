@@ -18,11 +18,26 @@ object MLibUtils {
   /** Convert an MLlib matrix to a Breeze dense matrix */
   def mllibMatrixToDenseBreeze(matrix: org.apache.spark.mllib.linalg.distributed.IndexedRowMatrix): DenseMatrix[Double] = {
     // Breeze is column ordered so create transposed matrix from rows
-    val result = new DenseMatrix[Double](matrix.numCols.toInt, matrix.numRows.toInt)
+    val breezeMatrix = new DenseMatrix[Double](matrix.numCols.toInt, matrix.numRows.toInt)
     matrix.rows.collect.foreach(row => {
-      result(::, row.index.toInt) := mllibVectorToDenseBreeze(row.vector)
+      breezeMatrix(::, row.index.toInt) := mllibVectorToDenseBreeze(row.vector)
     })
-    result.t
+    breezeMatrix.t
+  }
+
+  def mllibMatrixToDenseBreeze(matrix: org.apache.spark.mllib.linalg.Matrix): DenseMatrix[Double] = {
+    matrix match {
+      case dense: org.apache.spark.mllib.linalg.DenseMatrix => {
+        if (!dense.isTransposed) {
+          new DenseMatrix[Double](dense.numRows, dense.numCols, dense.values)
+        } else {
+          val breezeMatrix = new DenseMatrix[Double](dense.numRows, dense.numCols, dense.values)
+          breezeMatrix.t
+        }
+      }
+
+      case _ => new DenseMatrix[Double](matrix.numRows, matrix.numCols, matrix.toArray)
+    }
   }
 
   /** Convert a Breeze vector to an MLlib vector, maintaining underlying data structure (sparse vs dense) */

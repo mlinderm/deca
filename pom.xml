@@ -21,6 +21,7 @@
     <scala.version>2.10.4</scala.version>
     <scala.version.prefix>2.10</scala.version.prefix>
     <spark.version>1.6.3</spark.version>
+    <breeze.version>0.11.2</breeze.version>
     <!-- Edit the following line to configure the Hadoop (HDFS) version. -->
     <hadoop.version>2.6.0</hadoop.version>
     <utils.version>0.2.11</utils.version>
@@ -405,8 +406,8 @@
       </dependency>
       <dependency>
         <groupId>org.scalanlp</groupId>
-        <artifactId>breeze_2.10</artifactId>
-        <version>0.13</version>
+        <artifactId>breeze_${scala.version.prefix}</artifactId>
+        <version>${breeze.version}</version>
       </dependency>
       <dependency>
         <groupId>org.seqdoop</groupId>
