@@ -1,19 +1,50 @@
 package org.bdgenomics.deca
 
 import breeze.linalg.sum
+import breeze.numerics.sqrt
 import breeze.stats.meanAndVariance
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.utils.misc.Logging
+
 import util.control.Breaks._
 
 object Normalization extends Serializable with Logging {
 
+  def filterColumns(matrix: IndexedRowMatrix,
+                    minMean: Double = Double.MinValue, maxMean: Double = Double.MaxValue,
+                    minSD: Double = 0, maxSD: Double = Double.MaxValue): IndexedRowMatrix = {
+    val colStats = matrix.toRowMatrix.computeColumnSummaryStatistics
+    val colMeans = MLibUtils.mllibVectorToDenseBreeze(colStats.mean)
+    val colSDs = sqrt(MLibUtils.mllibVectorToDenseBreeze(colStats.variance))
+
+    val toKeep = (colMeans :>= minMean) :& (colMeans :<= maxMean) :& (colSDs :>= minSD) :& (colSDs :<= maxSD)
+
+    val toKeepBroadcast = SparkContext.getOrCreate().broadcast(toKeep)
+    new IndexedRowMatrix(matrix.rows.map(row => {
+      val vector = MLibUtils.mllibVectorToDenseBreeze(row.vector)
+      IndexedRow(row.index, MLibUtils.breezeVectorToMLlib(vector(toKeepBroadcast.value)))
+    }))
+  }
+
   def meanCenterColumns(matrix: IndexedRowMatrix): IndexedRowMatrix = {
     val colStats = matrix.toRowMatrix.computeColumnSummaryStatistics
     new IndexedRowMatrix(matrix.rows.map(row => {
-      IndexedRow(row.index,
-        MLibUtils.breezeVectorToMLlib(MLibUtils.mllibVectorToDenseBreeze(row.vector) - MLibUtils.mllibVectorToDenseBreeze(colStats.mean)))
+      IndexedRow(
+        row.index,
+        MLibUtils.breezeVectorToMLlib(
+          MLibUtils.mllibVectorToDenseBreeze(row.vector) - MLibUtils.mllibVectorToDenseBreeze(colStats.mean)))
+    }))
+  }
+
+  def filterRows(matrix: IndexedRowMatrix,
+                 minMean: Double = Double.MinValue, maxMean: Double = Double.MaxValue,
+                 minSD: Double = 0, maxSD: Double = Double.MaxValue): IndexedRowMatrix = {
+    new IndexedRowMatrix(matrix.rows.filter(row => {
+      val stats = meanAndVariance(MLibUtils.mllibVectorToDenseBreeze(row.vector))
+      val mean = stats.mean
+      val sd = Math.sqrt(stats.variance)
+      mean >= minMean && mean <= maxMean && sd >= minSD && sd <= maxSD
     }))
   }
 

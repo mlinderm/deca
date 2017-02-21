@@ -90,8 +90,8 @@ for (r in 1:nrow(Rd)) {
 
 # XHMM filterTargetProperties function
 norm_targets_to_keep <- {
-  target_means <- colMeans(Rd)
-  target_means <= 30
+  target_sds <- apply(Rd_star, 2, sd)
+  target_sds <= 30
 }
 Rd_star <- Rd_star[,norm_targets_to_keep]
 

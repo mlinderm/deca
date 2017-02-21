@@ -1,6 +1,6 @@
 package org.bdgenomics.deca
 
-import breeze.linalg.{ DenseVector, SparseVector, DenseMatrix }
+import breeze.linalg.{ DenseMatrix, DenseVector, SliceVector, SparseVector }
 
 /**
  * Adapted from https://github.com/amplab/keystone/blob/master/src/main/scala/utils/MLlibUtils.scala
@@ -43,6 +43,7 @@ object MLibUtils {
   /** Convert a Breeze vector to an MLlib vector, maintaining underlying data structure (sparse vs dense) */
   def breezeVectorToMLlib(breezeVector: breeze.linalg.Vector[Double]): org.apache.spark.mllib.linalg.Vector = {
     breezeVector match {
+      case v: SliceVector[Int, Double] => breezeVectorToMLlib(v.toDenseVector)
       case v: DenseVector[Double] =>
         if (v.offset == 0 && v.stride == 1 && v.length == v.data.length) {
           new org.apache.spark.mllib.linalg.DenseVector(v.data)
