@@ -9,7 +9,7 @@ class DecaSuite extends DecaFunSuite {
 
   sparkTest("read XHMM matrix") {
     val rdPath = resourceUrl("DATA.RD.txt")
-    val (samples, targets, rdMatrix) = Deca.readXHMMMatrix(rdPath.toString)
+    val (rdMatrix, samples, targets) = Deca.readXHMMMatrix(rdPath.toString)
 
     assert(samples.length === 30)
     assert(samples(1) === "HG00096")

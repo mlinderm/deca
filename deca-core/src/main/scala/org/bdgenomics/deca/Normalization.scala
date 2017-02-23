@@ -5,26 +5,30 @@ import breeze.numerics.sqrt
 import breeze.stats.meanAndVariance
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.utils.misc.Logging
 
 import util.control.Breaks._
 
 object Normalization extends Serializable with Logging {
 
-  def filterColumns(matrix: IndexedRowMatrix,
+  def filterColumns(matrix: IndexedRowMatrix, targets: Array[ReferenceRegion],
                     minMean: Double = Double.MinValue, maxMean: Double = Double.MaxValue,
-                    minSD: Double = 0, maxSD: Double = Double.MaxValue): IndexedRowMatrix = {
+                    minSD: Double = 0, maxSD: Double = Double.MaxValue): (IndexedRowMatrix, Array[ReferenceRegion]) = {
     val colStats = matrix.toRowMatrix.computeColumnSummaryStatistics
     val colMeans = MLibUtils.mllibVectorToDenseBreeze(colStats.mean)
     val colSDs = sqrt(MLibUtils.mllibVectorToDenseBreeze(colStats.variance))
 
     val toKeep = (colMeans :>= minMean) :& (colMeans :<= maxMean) :& (colSDs :>= minSD) :& (colSDs :<= maxSD)
+    val newTargets = targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target }
 
     val toKeepBroadcast = SparkContext.getOrCreate().broadcast(toKeep)
-    new IndexedRowMatrix(matrix.rows.map(row => {
+    val filteredMatrix = new IndexedRowMatrix(matrix.rows.map(row => {
       val vector = MLibUtils.mllibVectorToDenseBreeze(row.vector)
       IndexedRow(row.index, MLibUtils.breezeVectorToMLlib(vector(toKeepBroadcast.value)))
     }))
+
+    (filteredMatrix, newTargets)
   }
 
   def meanCenterColumns(matrix: IndexedRowMatrix): IndexedRowMatrix = {
@@ -93,4 +97,31 @@ object Normalization extends Serializable with Logging {
     }))
 
   }
+
+  def normalizeReadDepth(readMatrix: IndexedRowMatrix, targets: Array[ReferenceRegion],
+                         minTargetMeanRD: Double = 10.0, maxTargetMeanRD: Double = 500.0,
+                         minSampleMeanRD: Double = 25.0, maxSampleMeanRD: Double = 200.0,
+                         minSampleSDRD: Double = 0.0, maxSampleSDRD: Double = 150.0,
+                         maxTargetSDRDStar: Double = 30.0): (IndexedRowMatrix, Array[ReferenceRegion]) = {
+
+    // Filter I: Filter extreme targets and samples, then mean center the data
+    val (targFilteredrdMatrix, targFilteredRdTargets) = filterColumns(readMatrix, targets,
+      minMean = minTargetMeanRD, maxMean = maxTargetMeanRD)
+    val sampFilteredRdMatrix = filterRows(targFilteredrdMatrix,
+      minMean = minSampleMeanRD, maxMean = maxSampleMeanRD, minSD = minSampleSDRD, maxSD = maxSampleSDRD)
+    val centeredRdMatrix = meanCenterColumns(sampFilteredRdMatrix)
+
+    // PCA normalization
+    val rdStarMatrix = pcaNormalization(centeredRdMatrix)
+
+    // Filter II: Filter extremely variable targets
+    val (targFilteredRdStarMatrix, targFilteredRdStarTargets) = filterColumns(rdStarMatrix, targFilteredRdTargets,
+      maxSD = maxTargetSDRDStar)
+
+    // Z-score by sample
+    val zMatrix = Normalization.zscoreRows(targFilteredRdStarMatrix)
+
+    (zMatrix, targFilteredRdStarTargets)
+  }
+
 }

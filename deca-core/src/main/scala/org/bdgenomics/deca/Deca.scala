@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.deca
 
+import breeze.linalg.DenseVector
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.{ DenseVector => SDV }
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
@@ -27,7 +28,9 @@ import org.bdgenomics.utils.misc.Logging
 
 object Deca extends Serializable with Logging {
 
-  def readXHMMMatrix(filePath: String): (Array[String], Array[ReferenceRegion], IndexedRowMatrix) = {
+  def readXHMMMatrix(filePath: String,
+                     targetsToExclude: Array[ReferenceRegion] = Array(),
+                     minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue): (IndexedRowMatrix, Array[String], Array[ReferenceRegion]) = {
     val sc = SparkContext.getOrCreate()
     val lines = sc.textFile(filePath)
     lines.cache()
@@ -38,23 +41,36 @@ object Deca extends Serializable with Logging {
       new ReferenceRegion(fields(0), fields(1).toLong - 1, fields(2).toLong)
     })
 
+    // Filter matrix based on target characteristics (including suppression list)
+    val targetsToExcludeSet = targetsToExclude.toSet
+    val toKeep = DenseVector.tabulate(targets.length) { (index) =>
+      {
+        val target = targets(index)
+        val length = target.length
+        (length >= minTargetLength) && (length <= maxTargetLength) && !targetsToExcludeSet.contains(target)
+      }
+    }
+
     // Return sample IDs as array
     val samples = lines.map(line => {
       line.substring(0, line.indexOf('\t'))
     }).collect().drop(1)
 
     // Read matrix body into IndexedRow RDD dropping first row and first column
+    val toKeepBroadcast = SparkContext.getOrCreate().broadcast(toKeep)
     val matrix = new IndexedRowMatrix(lines.zipWithIndex.flatMap(lineWithIndex => {
       val (line, index) = lineWithIndex
       if (index == 0)
         None
-      else
-        Some(IndexedRow(index - 1, new SDV(line.split('\t').drop(1).map(_.toDouble))))
+      else {
+        val myToKeep = toKeepBroadcast.value
+        Some(IndexedRow(index - 1, new SDV(line.split('\t').drop(1).zipWithIndex.collect {
+          case (depth, targetIndex) if myToKeep(targetIndex) => depth.toDouble
+        })))
+      }
     }))
 
-    lines.unpersist()
-
-    (samples, targets, matrix)
+    (matrix, samples, targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target })
   }
 
   def callCnvs(reads: AlignmentRecordRDD): FeatureRDD = {

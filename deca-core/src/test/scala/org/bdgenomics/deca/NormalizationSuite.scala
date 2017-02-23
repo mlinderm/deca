@@ -3,9 +3,10 @@
  */
 package org.bdgenomics.deca
 
-import breeze.linalg.{ DenseMatrix, DenseVector }
+import breeze.linalg.{ DenseMatrix, DenseVector, max }
 import breeze.numerics.abs
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
+import org.bdgenomics.adam.models.ReferenceRegion
 
 class NormalizationSuite extends DecaFunSuite {
   /**
@@ -25,12 +26,6 @@ class NormalizationSuite extends DecaFunSuite {
   def aboutEq(a: DenseMatrix[Double], b: DenseMatrix[Double]): Boolean = {
     require(a.rows == b.rows && a.cols == b.cols, "Matrices must be the same size.")
     abs(a - b).toArray.forall(_ < thresh)
-  }
-
-  sparkTest("filter targets by mean and SD") {
-    val rdPath = resourceUrl("DATA.RD.txt")
-    val lines = sc.textFile(rdPath.toString)
-    assert(lines.count() === 31)
   }
 
   sparkTest("mean centers data by columns") {
@@ -56,14 +51,36 @@ class NormalizationSuite extends DecaFunSuite {
 
     val centered = Normalization.meanCenterColumns(matrix)
     val matrixStar = Normalization.pcaNormalization(centered)
-    assert(aboutEq(result, MLibUtils.mllibMatrixToDenseBreeze(matrixStar), 5e-16))
+    assert(aboutEq(result, MLibUtils.mllibMatrixToDenseBreeze(matrixStar), thresh = 5e-16))
   }
 
   sparkTest("filters and centers SVD results") {
-    val (samples, targets, rdStarMatrix) = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.txt").toString)
-    val (samplesResult, targetsResult, result) = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
+    val (rdStarMatrix, samples, targets) = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.txt").toString)
+    val (resultMatrix, resultSamples, resultTargets) = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
 
-    val Z = Normalization.zscoreRows(Normalization.filterColumns(rdStarMatrix, maxSD = 30.0))
-    assert(aboutEq(MLibUtils.mllibMatrixToDenseBreeze(result), MLibUtils.mllibMatrixToDenseBreeze(Z)))
+    val (targFilteredRdStar, targFilteredRdStarTargets) = Normalization.filterColumns(rdStarMatrix, targets, maxSD = 30.0)
+    val zMatrix = Normalization.zscoreRows(targFilteredRdStar)
+    assert(aboutEq(MLibUtils.mllibMatrixToDenseBreeze(resultMatrix), MLibUtils.mllibMatrixToDenseBreeze(zMatrix)))
+    assert(targFilteredRdStarTargets.sameElements(resultTargets))
+  }
+
+  sparkTest("filters and normalizes read depth data") {
+    // To match XHMM need to filter out low complexity and extreme GC targets. For the example data, this is just
+    // 22:19770437-19770545
+    // And also filter out targets with length < 10 and > 10000
+    val (rdMatrix, samples, targets) = Deca.readXHMMMatrix(
+      resourceUrl("DATA.RD.txt").toString,
+      Array(ReferenceRegion("22", 19770436L, 19770545L)),
+      minTargetLength = 10L, maxTargetLength = 10000L)
+
+    val (resultMatrix, resultSamples, resultTargets) = Deca.readXHMMMatrix(
+      resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
+
+    val (zMatrix, zTargets) = Normalization.normalizeReadDepth(rdMatrix, targets)
+
+    // Max observed difference was 1.02e-4 between XHMM results and this implementation
+    assert(aboutEq(
+      MLibUtils.mllibMatrixToDenseBreeze(resultMatrix), MLibUtils.mllibMatrixToDenseBreeze(zMatrix), thresh = 2e-4))
+    assert(zTargets.sameElements(resultTargets))
   }
 }

@@ -29,7 +29,7 @@ private[cli] object DecaMain {
 
 private class DecaMain(args: Array[String]) extends Logging {
 
-  private val commands: List[BDGCommandCompanion] = List.empty
+  private val commands: List[BDGCommandCompanion] = List(Normalizer)
 
   private def printVersion() {
     val about = new About()
