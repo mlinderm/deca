@@ -6,6 +6,7 @@ import breeze.stats.meanAndVariance
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
+import org.bdgenomics.deca.Timers._
 import org.bdgenomics.utils.misc.Logging
 
 import util.control.Breaks._
@@ -52,7 +53,7 @@ object Normalization extends Serializable with Logging {
     }))
   }
 
-  def zscoreRows(matrix: IndexedRowMatrix): IndexedRowMatrix = {
+  def zscoreRows(matrix: IndexedRowMatrix): IndexedRowMatrix = ComputeZScores.time {
     new IndexedRowMatrix(matrix.rows.map(row => {
       val vector = MLibUtils.mllibVectorToDenseBreeze(row.vector)
       val stats = meanAndVariance(vector)
@@ -60,8 +61,10 @@ object Normalization extends Serializable with Logging {
     }))
   }
 
-  def pcaNormalization(readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = {
-    val svd = readMatrix.computeSVD(Math.min(readMatrix.numRows, readMatrix.numCols).toInt, computeU = false)
+  def pcaNormalization(readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = PCANormalization.time {
+    val svd = ComputeSVD.time {
+      readMatrix.computeSVD(Math.min(readMatrix.numRows, readMatrix.numCols).toInt, computeU = false)
+    }
 
     // Determine components to remove
     var toRemove = svd.s.size
@@ -102,21 +105,24 @@ object Normalization extends Serializable with Logging {
                          minTargetMeanRD: Double = 10.0, maxTargetMeanRD: Double = 500.0,
                          minSampleMeanRD: Double = 25.0, maxSampleMeanRD: Double = 200.0,
                          minSampleSDRD: Double = 0.0, maxSampleSDRD: Double = 150.0,
-                         maxTargetSDRDStar: Double = 30.0): (IndexedRowMatrix, Array[ReferenceRegion]) = {
+                         maxTargetSDRDStar: Double = 30.0): (IndexedRowMatrix, Array[ReferenceRegion]) = NormalizeReadDepths.time {
 
     // Filter I: Filter extreme targets and samples, then mean center the data
-    val (targFilteredrdMatrix, targFilteredRdTargets) = filterColumns(readMatrix, targets,
-      minMean = minTargetMeanRD, maxMean = maxTargetMeanRD)
-    val sampFilteredRdMatrix = filterRows(targFilteredrdMatrix,
-      minMean = minSampleMeanRD, maxMean = maxSampleMeanRD, minSD = minSampleSDRD, maxSD = maxSampleSDRD)
-    val centeredRdMatrix = meanCenterColumns(sampFilteredRdMatrix)
+    val (centeredRdMatrix, targFilteredRdTargets) = ReadDepthFilterI.time {
+      val (targFilteredrdMatrix, targFilteredRdTargets) = filterColumns(readMatrix, targets,
+        minMean = minTargetMeanRD, maxMean = maxTargetMeanRD)
+      val sampFilteredRdMatrix = filterRows(targFilteredrdMatrix,
+        minMean = minSampleMeanRD, maxMean = maxSampleMeanRD, minSD = minSampleSDRD, maxSD = maxSampleSDRD)
+      (meanCenterColumns(sampFilteredRdMatrix), targFilteredRdTargets)
+    }
 
     // PCA normalization
     val rdStarMatrix = pcaNormalization(centeredRdMatrix)
 
     // Filter II: Filter extremely variable targets
-    val (targFilteredRdStarMatrix, targFilteredRdStarTargets) = filterColumns(rdStarMatrix, targFilteredRdTargets,
-      maxSD = maxTargetSDRDStar)
+    val (targFilteredRdStarMatrix, targFilteredRdStarTargets) = ReadDepthFilterII.time {
+      filterColumns(rdStarMatrix, targFilteredRdTargets, maxSD = maxTargetSDRDStar)
+    }
 
     // Z-score by sample
     val zMatrix = Normalization.zscoreRows(targFilteredRdStarMatrix)

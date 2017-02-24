@@ -36,11 +36,13 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
   val companion = Normalizer
 
   def run(sc: SparkContext): Unit = {
+
     // TODO: Read in excluded targets
     // TODO: Add in various command line arguments
     var (rdMatrix, samples, targets) = Deca.readXHMMMatrix(
       args.inputPath, minTargetLength = 10L, maxTargetLength = 10000L)
     val (zMatrix, zTargets) = Normalization.normalizeReadDepth(rdMatrix, targets)
     // TODO: Write out XHMM compatible table of zScores
+
   }
 }
