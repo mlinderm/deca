@@ -18,12 +18,15 @@
 package org.bdgenomics.deca
 
 import breeze.linalg.DenseVector
+import htsjdk.samtools.util.AsciiWriter
+import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.{ DenseVector => SDV }
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.deca.util.FileMerger
 import org.bdgenomics.utils.misc.Logging
 
 object Deca extends Serializable with Logging {
@@ -71,6 +74,46 @@ object Deca extends Serializable with Logging {
     }))
 
     (matrix, samples, targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target })
+  }
+
+  def writeXHMMMatrix(matrix: IndexedRowMatrix, samples: Array[String], targets: Array[ReferenceRegion], filePath: String, label: String = "Matrix") = {
+    val sc = SparkContext.getOrCreate()
+
+    val lines = matrix.rows.map(row => {
+      val sample: String = samples(row.index.toInt)
+      row.vector match {
+        case dense: org.apache.spark.mllib.linalg.DenseVector => dense.values.mkString(start = sample + "\t", sep = "\t", end = "")
+        case _ => row.vector.toArray.mkString(start = sample + "\t", sep = "\t", end = "")
+      }
+    })
+
+    val headPath = new Path("%s_head".format(filePath))
+    val bodyPath = "%s_body".format(filePath)
+
+    val conf = lines.context.hadoopConfiguration
+    val fs = headPath.getFileSystem(conf)
+
+    { // Write header file
+      val headOutputStream = fs.create(headPath)
+      val headerWriter = new AsciiWriter(headOutputStream)
+      try {
+        headerWriter.write(label)
+        targets.foreach(target => {
+          headerWriter.write('\t')
+          headerWriter.write("%s:%d-%d".format(target.referenceName, target.start + 1, target.end))
+        })
+        headerWriter.write('\n')
+      } finally {
+        headerWriter.close()
+        headOutputStream.close()
+      }
+    }
+
+    // Write body files
+    lines.saveAsTextFile(bodyPath.toString)
+
+    // Merge files into file result (does not preserve ordering of sample lines)
+    FileMerger.mergeFiles(conf, fs, new Path(filePath), new Path(bodyPath), Some(headPath))
   }
 
   def callCnvs(reads: AlignmentRecordRDD): FeatureRDD = {
