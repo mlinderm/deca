@@ -76,15 +76,18 @@ object Deca extends Serializable with Logging {
     (matrix, samples, targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target })
   }
 
-  def writeXHMMMatrix(matrix: IndexedRowMatrix, samples: Array[String], targets: Array[ReferenceRegion], filePath: String, label: String = "Matrix") = {
+  def writeXHMMMatrix(matrix: IndexedRowMatrix, samples: Array[String], targets: Array[ReferenceRegion],
+                      filePath: String,
+                      label: String = "Matrix") = {
     val sc = SparkContext.getOrCreate()
 
     val lines = matrix.rows.map(row => {
       val sample: String = samples(row.index.toInt)
-      row.vector match {
-        case dense: org.apache.spark.mllib.linalg.DenseVector => dense.values.mkString(start = sample + "\t", sep = "\t", end = "")
-        case _ => row.vector.toArray.mkString(start = sample + "\t", sep = "\t", end = "")
+      val valuesAsArray = row.vector match {
+        case dense: org.apache.spark.mllib.linalg.DenseVector => dense.values
+        case _ => row.vector.toArray
       }
+      valuesAsArray.mkString(start = sample + "\t", sep = "\t", end = "")
     })
 
     val headPath = new Path("%s_head".format(filePath))

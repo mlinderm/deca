@@ -1,4 +1,4 @@
-package org.bdgenomics.deca
+package org.bdgenomics.deca.util
 
 import breeze.linalg.{ DenseMatrix, DenseVector, SliceVector, SparseVector }
 

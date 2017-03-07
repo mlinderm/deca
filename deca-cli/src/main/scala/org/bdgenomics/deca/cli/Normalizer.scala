@@ -25,10 +25,41 @@ class NormalizerArgs extends Args4jBase {
     index = 0)
   var inputPath: String = null
 
+  @Argument(required = true,
+    metaVar = "OUTPUT",
+    usage = "The XHMM normalized and z-score centered matrix",
+    index = 1)
+  var outputPath: String = null
+
   @Args4jOption(required = false,
     name = "-min_target_mean_RD",
     usage = "Minimum target mean read depth prior to normalization. Defaults to 10.")
   var minTargetMeanRD: Int = 10
+
+  @Args4jOption(required = false,
+    name = "-max_target_mean_RD",
+    usage = "Maximum target mean read depth prior to normalization. Defaults to 500.")
+  var maxTargetMeanRD: Int = 500
+
+  @Args4jOption(required = false,
+    name = "-min_sample_mean_RD",
+    usage = "Minimum sample mean read depth prior to normalization. Defaults to 25.")
+  var minSampleMeanRD: Int = 25
+
+  @Args4jOption(required = false,
+    name = "-max_sample_mean_RD",
+    usage = "Maximum sample mean read depth prior to normalization. Defaults to 200.")
+  var maxSampleMeanRD: Int = 200
+
+  @Args4jOption(required = false,
+    name = "-max_sample_sd_RD",
+    usage = "Maximum sample standard deviation of the read depth prior to normalization. Defaults to 150.")
+  var maxSampleSDRD: Int = 150
+
+  @Args4jOption(required = false,
+    name = "-max_target_sd_RD_star",
+    usage = "Maximum target standard deviation of the read depth after normalization. Defaults to 30.")
+  var maxTargetSDRDStar: Int = 30
 }
 
 class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[NormalizerArgs] {
@@ -38,11 +69,16 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
   def run(sc: SparkContext): Unit = {
 
     // TODO: Read in excluded targets
-    // TODO: Add in various command line arguments
+    // TODO: Add in full complement of command line arguments
     var (rdMatrix, samples, targets) = Deca.readXHMMMatrix(
       args.inputPath, minTargetLength = 10L, maxTargetLength = 10000L)
-    val (zMatrix, zTargets) = Normalization.normalizeReadDepth(rdMatrix, targets)
-    // TODO: Write out XHMM compatible table of zScores
+
+    val (zMatrix, zTargets) = Normalization.normalizeReadDepth(rdMatrix, targets,
+      minTargetMeanRD = args.minTargetMeanRD, maxTargetMeanRD = args.maxTargetMeanRD,
+      minSampleMeanRD = args.minSampleMeanRD, maxSampleMeanRD = args.maxSampleMeanRD,
+      maxSampleSDRD = args.maxSampleSDRD, maxTargetSDRDStar = args.maxTargetSDRDStar)
+
+    Deca.writeXHMMMatrix(zMatrix, samples, zTargets, args.outputPath, label = "Matrix")
 
   }
 }

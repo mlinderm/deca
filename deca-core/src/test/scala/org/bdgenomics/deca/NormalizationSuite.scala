@@ -7,6 +7,7 @@ import breeze.linalg.{ DenseMatrix, DenseVector, max }
 import breeze.numerics.abs
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
+import org.bdgenomics.deca.util.MLibUtils
 
 class NormalizationSuite extends DecaFunSuite {
   /**

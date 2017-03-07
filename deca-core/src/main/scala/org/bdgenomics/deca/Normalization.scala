@@ -7,9 +7,9 @@ import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.deca.Timers._
+import org.bdgenomics.deca.util.MLibUtils
 import org.bdgenomics.utils.misc.Logging
-
-import util.control.Breaks._
+import scala.util.control.Breaks._
 
 object Normalization extends Serializable with Logging {
 

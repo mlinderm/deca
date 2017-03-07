@@ -4,8 +4,7 @@ import java.io.File
 
 import com.google.common.io.Files
 import org.bdgenomics.adam.models.ReferenceRegion
-
-import scala.io.Source
+import org.bdgenomics.deca.util.MLibUtils
 
 /**
  * Created by mlinderman on 2/21/17.
