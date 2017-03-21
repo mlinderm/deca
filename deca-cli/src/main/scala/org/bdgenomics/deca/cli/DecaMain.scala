@@ -17,6 +17,7 @@
  */
 package org.bdgenomics.deca.cli
 
+import org.bdgenomics.adam.cli.About
 import org.bdgenomics.utils.cli._
 import org.bdgenomics.utils.misc.Logging
 
