@@ -151,7 +151,11 @@
     </dependency>
     <dependency>
       <groupId>org.scalanlp</groupId>
-      <artifactId>breeze_2.10</artifactId>
+      <artifactId>breeze_${scala.version.prefix}</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.scalanlp</groupId>
+      <artifactId>breeze-natives_${scala.version.prefix}</artifactId>
     </dependency>
     <dependency>
       <groupId>org.seqdoop</groupId>

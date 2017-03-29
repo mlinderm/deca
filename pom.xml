@@ -410,6 +410,11 @@
         <version>${breeze.version}</version>
       </dependency>
       <dependency>
+        <groupId>org.scalanlp</groupId>
+        <artifactId>breeze-natives_${scala.version.prefix}</artifactId>
+        <version>${breeze.version}</version>
+      </dependency>
+      <dependency>
         <groupId>org.seqdoop</groupId>
         <artifactId>hadoop-bam</artifactId>
         <version>7.0.0</version>
