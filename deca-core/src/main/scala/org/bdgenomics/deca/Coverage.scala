@@ -3,19 +3,25 @@ package org.bdgenomics.deca
 import breeze.linalg.{ DenseVector, convert, min }
 import breeze.stats.mean
 import htsjdk.samtools.{ CigarElement, CigarOperator }
+import org.apache.spark.SparkContext
+import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.apache.spark.mllib.linalg.{ Vector => SparkVector }
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.adam.rich.RichAlignmentRecord
+import org.bdgenomics.deca.coverage.TargetRDD
+import org.bdgenomics.deca.util.MLibUtils
+import org.bdgenomics.deca.Timers._
+import org.bdgenomics.utils.misc.Logging
 
 import scala.collection.JavaConversions._
 
 /**
  * Created by mlinderman on 3/8/17.
  */
-object Coverage {
+object Coverage extends Serializable with Logging {
 
   def addReadToPileup(region: ReferenceRegion, read: RichAlignmentRecord, pileup: DenseVector[Int], minBaseQ: Int): DenseVector[Int] = {
     var targetIdx = (read.getStart - region.start).toInt
@@ -42,33 +48,81 @@ object Coverage {
     pileup
   }
 
-  def targetCoverage(targets: FeatureRDD, reads: AlignmentRecordRDD, minMapQ: Int = 0, minBaseQ: Int = 0): RDD[(ReferenceRegion, Double)] = {
+  def targetCoverage(targets: TargetRDD, reads: AlignmentRecordRDD, minMapQ: Int = 0, minBaseQ: Int = 0): RDD[(Long, Double)] = PerSampleTargetCoverage.time {
+    val samples = reads.recordGroups.toSamples
+    if (samples.length > 1) {
+      throw new IllegalArgumentException("reads RDD must be a single sample")
+    }
+
     // Basic read filtering
     val filteredReads = reads.transform(rdd => rdd.filter(read => {
-      !read.getDuplicateRead && read.getReadMapped && read.getMapq >= minMapQ
+      !read.getDuplicateRead && read.getReadMapped && (minMapQ == 0 || read.getMapq >= minMapQ)
     }))
 
     // Compute left outer join of targets with reads through combination of inner join and co-group
-    val coveredIntervals = targets.shuffleRegionJoin(filteredReads)
-    val coverage = targets.rdd.keyBy(feature => feature).cogroup(coveredIntervals.rdd).map {
-      case (feature, (features, reads)) => {
-        val region = ReferenceRegion.unstranded(feature)
-
+    val coverage = targets.shuffleRegionJoin(filteredReads).rdd.groupByKey().map {
+      case (target, reads) => {
         if (reads.isEmpty)
-          (region, 0.0)
+          (target.index, 0.0)
         else {
+          val region = target.refRegion
           // Compute the coverage over this interval accounting for CIGAR string and any fragments
           var pileup = DenseVector.zeros[Int](region.length.toInt)
           reads.foreach(read => {
             // TODO: Count by fragment not by read
             pileup = addReadToPileup(region, new RichAlignmentRecord(read), pileup, minBaseQ)
           })
-          (region, mean(convert(pileup, Double)))
+          (target.index, mean(convert(pileup, Double)))
         }
       }
     }
 
     coverage
+  }
+
+  def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Long, (Long, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {
+    val indexedRows = coverageCoordinates.groupByKey.map {
+      case (sampleIdx, targetCovg) =>
+        var perTargetCoverage = DenseVector.zeros[Double](numTargets.toInt)
+        targetCovg.foreach {
+          case (targetIdx, covg) => perTargetCoverage(targetIdx.toInt) = covg
+        }
+        IndexedRow(sampleIdx, MLibUtils.breezeVectorToMLlib(perTargetCoverage))
+    }
+    new IndexedRowMatrix(indexedRows, numSamples, numTargets.toInt)
+  }
+
+  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0, minBaseQ: Int = 0): (IndexedRowMatrix, Array[String], Array[ReferenceRegion]) = ComputeReadDepths.time {
+    // Sequence dictionary parsing is broken in current ADAM release:
+    //    https://github.com/bigdatagenomics/adam/issues/1409
+    // which breaks the required sorting in the creation of the TargetRDD
+    val orderedTargets = TargetRDD.fromRdd(targets.rdd.zipWithIndex(), targets.sequences)
+    orderedTargets.rdd.cache()
+
+    val numSamples = readRdds.length
+    val numTargets = orderedTargets.rdd.count
+
+    val coverageCoordinates = TargetCoverage.time {
+      val coverageCoordinatesPerSample = readRdds.zipWithIndex.map {
+        case (readsRdd, sampleIdx) =>
+          val samples = readsRdd.recordGroups.toSamples
+          if (samples.length > 1) {
+            throw new IllegalArgumentException("reads RDD must be a single sample")
+          }
+
+          // Label coverage with sample ID to create (sampleId, (targetId, coverage)) RDD
+          targetCoverage(orderedTargets, readsRdd, minMapQ = minMapQ, minBaseQ = minBaseQ).map((sampleIdx.toLong, _))
+      }
+
+      val sc = SparkContext.getOrCreate()
+      sc.union(coverageCoordinatesPerSample)
+    }
+
+    val rdMatrix = coverageMatrixFromCoordinates(coverageCoordinates, numSamples, numTargets)
+    val samplesDriver = readRdds.map(readsRdd => readsRdd.recordGroups.toSamples.head.getSampleId).toArray
+    val targetsDriver = orderedTargets.rdd.map(_.refRegion).collect
+
+    (rdMatrix, samplesDriver, targetsDriver)
   }
 
 }

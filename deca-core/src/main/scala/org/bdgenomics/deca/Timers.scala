@@ -7,6 +7,12 @@ import org.bdgenomics.utils.instrumentation.Metrics
  */
 private[deca] object Timers extends Metrics {
 
+  // org.bdgenomics.deca.Coverage
+  val ComputeReadDepths = timer("Generate read depth matrix from reads")
+  val PerSampleTargetCoverage = timer("Determine coverage per-sample as coordinates")
+  val TargetCoverage = timer("Determine coverage for all samples as coordinates")
+  val CoverageCoordinatesToMatrix = timer("Convert coverage coordinates to matrix")
+
   // org.bdgenomics.deca.Normalization
   val NormalizeReadDepths = timer("Normalize read depth matrix")
   val ReadDepthFilterI = timer("Filter read depths by target and sample prior to PCA normalization")

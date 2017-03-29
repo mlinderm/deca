@@ -1,8 +1,8 @@
 package org.bdgenomics.deca
 
 import breeze.numerics.abs
-import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.ADAMContext._
+import org.bdgenomics.deca.util.MLibUtils
 
 /**
  * Created by mlinderman on 3/9/17.
@@ -14,14 +14,15 @@ class CoverageSuite extends DecaFunSuite {
     val reads = sc.loadAlignments(inputBam.toString)
 
     val inputTargets = resourceUrl("EXOME.interval_list")
-    val targets = sc.loadFeatures(inputTargets.toString)
+    val features = sc.loadFeatures(inputTargets.toString)
 
-    val coverage = Coverage.targetCoverage(targets, reads, 20, 0)
-    coverage.cache()
+    val (rdMatrix, samples, targets) = Coverage.coverageMatrix(Seq(reads), features, minMapQ = 20, minBaseQ = 0)
+    assert(rdMatrix.numRows() === 1 && rdMatrix.numCols() === 300)
 
-    assert(targets.rdd.count === coverage.count)
-
-    val result = coverage.lookup(ReferenceRegion("22", 16448824, 16449023))
-    assert(abs(result.head - 18.31) < .05) // Error limit determined by rounding in XHMM tutorial data
+    val matrix = MLibUtils.mllibMatrixToDenseBreeze(rdMatrix)
+    println(matrix)
+    assert(abs(matrix(0, 0) - 18.31) < .05) // Should be target 22:16448824-16449023
+    assert(matrix(0, 1) > 0)
+    assert(matrix(0, 2) === 0.0)
   }
 }

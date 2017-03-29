@@ -105,6 +105,7 @@ object Normalization extends Serializable with Logging {
                          minTargetMeanRD: Double = 10.0, maxTargetMeanRD: Double = 500.0,
                          minSampleMeanRD: Double = 25.0, maxSampleMeanRD: Double = 200.0,
                          minSampleSDRD: Double = 0.0, maxSampleSDRD: Double = 150.0,
+                         pveMeanFactor: Double = 0.7,
                          maxTargetSDRDStar: Double = 30.0): (IndexedRowMatrix, Array[ReferenceRegion]) = NormalizeReadDepths.time {
 
     // Filter I: Filter extreme targets and samples, then mean center the data
@@ -117,7 +118,7 @@ object Normalization extends Serializable with Logging {
     }
 
     // PCA normalization
-    val rdStarMatrix = pcaNormalization(centeredRdMatrix)
+    val rdStarMatrix = pcaNormalization(centeredRdMatrix, pveMeanFactor = pveMeanFactor)
 
     // Filter II: Filter extremely variable targets
     val (targFilteredRdStarMatrix, targFilteredRdStarTargets) = ReadDepthFilterII.time {

@@ -1,4 +1,4 @@
-@HD	VN:1.0	GO:none	SO:coordinate
+@HD	VN:1.0  SO:coordinate
 @SQ	SN:1	LN:249250621	UR:ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz        AS:NCBI37       SP:Human	M5:1b22b98cdeb4a9304cb5d48026a85128
 @SQ	SN:2	LN:243199373	UR:ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz        AS:NCBI37       SP:Human	M5:a0d9851da00400dec1098a9255ac712e
 @SQ	SN:3	LN:198022430	UR:ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz        AS:NCBI37       SP:Human	M5:fdfd811849cc2fadebc929bb925902e5
