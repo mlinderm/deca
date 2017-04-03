@@ -27,13 +27,14 @@ import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.deca.util.FileMerger
+import org.bdgenomics.deca.Timers._
 import org.bdgenomics.utils.misc.Logging
 
 object Deca extends Serializable with Logging {
 
   def readXHMMMatrix(filePath: String,
                      targetsToExclude: Array[ReferenceRegion] = Array(),
-                     minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue): (IndexedRowMatrix, Array[String], Array[ReferenceRegion]) = {
+                     minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue): (IndexedRowMatrix, Array[String], Array[ReferenceRegion]) = ReadXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
     val lines = sc.textFile(filePath)
     lines.cache()
@@ -78,7 +79,7 @@ object Deca extends Serializable with Logging {
 
   def writeXHMMMatrix(matrix: IndexedRowMatrix, samples: Array[String], targets: Array[ReferenceRegion],
                       filePath: String,
-                      label: String = "Matrix") = {
+                      label: String = "Matrix") = WriteXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
 
     val lines = matrix.rows.map(row => {

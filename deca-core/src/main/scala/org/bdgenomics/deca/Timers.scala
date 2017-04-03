@@ -7,6 +7,10 @@ import org.bdgenomics.utils.instrumentation.Metrics
  */
 private[deca] object Timers extends Metrics {
 
+  // org.bdgenomics.deca.Deca
+  val ReadXHMMMatrix = timer("Read XHMM-compatible matrix")
+  val WriteXHMMMatrix = timer("Write XHMM-compatible matrix")
+
   // org.bdgenomics.deca.Coverage
   val ComputeReadDepths = timer("Generate read depth matrix from reads")
   val PerSampleTargetCoverage = timer("Determine coverage per-sample as coordinates")
