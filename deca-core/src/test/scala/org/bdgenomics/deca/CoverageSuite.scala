@@ -20,7 +20,7 @@ class CoverageSuite extends DecaFunSuite {
     assert(rdMatrix.numRows() === 1 && rdMatrix.numCols() === 300)
 
     val matrix = MLibUtils.mllibMatrixToDenseBreeze(rdMatrix)
-    println(matrix)
+
     assert(abs(matrix(0, 0) - 18.31) < .05) // Should be target 22:16448824-16449023
     assert(matrix(0, 1) > 0)
     assert(matrix(0, 2) === 0.0)
