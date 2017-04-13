@@ -11,7 +11,7 @@ import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.adam.rich.RichAlignmentRecord
-import org.bdgenomics.deca.coverage.TargetRDD
+import org.bdgenomics.deca.coverage.{ ReadDepthMatrix, TargetRDD }
 import org.bdgenomics.deca.util.MLibUtils
 import org.bdgenomics.deca.Timers._
 import org.bdgenomics.utils.misc.Logging
@@ -92,7 +92,7 @@ object Coverage extends Serializable with Logging {
     new IndexedRowMatrix(indexedRows, numSamples, numTargets.toInt)
   }
 
-  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0, minBaseQ: Int = 0): (IndexedRowMatrix, Array[String], Array[ReferenceRegion]) = ComputeReadDepths.time {
+  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0, minBaseQ: Int = 0): ReadDepthMatrix = ComputeReadDepths.time {
     // Sequence dictionary parsing is broken in current ADAM release:
     //    https://github.com/bigdatagenomics/adam/issues/1409
     // which breaks the required sorting in the creation of the TargetRDD
@@ -122,7 +122,7 @@ object Coverage extends Serializable with Logging {
     val samplesDriver = readRdds.map(readsRdd => readsRdd.recordGroups.toSamples.head.getSampleId).toArray
     val targetsDriver = orderedTargets.rdd.map(_.refRegion).collect
 
-    (rdMatrix, samplesDriver, targetsDriver)
+    ReadDepthMatrix(rdMatrix, samplesDriver, targetsDriver)
   }
 
 }

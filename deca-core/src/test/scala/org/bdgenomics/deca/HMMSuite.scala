@@ -22,10 +22,9 @@ class HMMSuite extends DecaFunSuite {
   }
 
   sparkTest("Generates transition matrix for array of distances") {
-    val (rdMatrix, samples, targets) = Deca.readXHMMMatrix(
-      resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
+    val matrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
 
-    val transProb = TransitionProbabilities(targets, D = 70000, p = 1.0e-8, q = 1.0 / 6.0)
+    val transProb = TransitionProbabilities(matrix.targets, D = 70000, p = 1.0e-8, q = 1.0 / 6.0)
 
     {
       val expTrans = Array[Double](
@@ -36,10 +35,9 @@ class HMMSuite extends DecaFunSuite {
   }
 
   sparkTest("Discovers CNVs") {
-    val (rdMatrix, samples, targets) = Deca.readXHMMMatrix(
-      resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
+    val matrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
 
-    val cnvs = HMM.discoverCNVs(ReadDepthMatrix(rdMatrix, samples, targets))
+    val cnvs = HMM.discoverCNVs(matrix)
     assert(cnvs.rdd.count === 2)
     cnvs.rdd.collect.map(println(_))
   }

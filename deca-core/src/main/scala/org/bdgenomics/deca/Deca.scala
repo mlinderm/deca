@@ -24,17 +24,16 @@ import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.{ DenseVector => SDV }
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
-import org.bdgenomics.adam.rdd.feature.FeatureRDD
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.deca.util.FileMerger
 import org.bdgenomics.deca.Timers._
+import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.utils.misc.Logging
 
 object Deca extends Serializable with Logging {
 
   def readXHMMMatrix(filePath: String,
                      targetsToExclude: Array[ReferenceRegion] = Array(),
-                     minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue): (IndexedRowMatrix, Array[String], Array[ReferenceRegion]) = ReadXHMMMatrix.time {
+                     minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue): ReadDepthMatrix = ReadXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
     val lines = sc.textFile(filePath)
     lines.cache()
@@ -74,16 +73,15 @@ object Deca extends Serializable with Logging {
       }
     }))
 
-    (matrix, samples, targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target })
+    ReadDepthMatrix(matrix, samples, targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target })
   }
 
-  def writeXHMMMatrix(matrix: IndexedRowMatrix, samples: Array[String], targets: Array[ReferenceRegion],
-                      filePath: String,
-                      label: String = "Matrix") = WriteXHMMMatrix.time {
+  def writeXHMMMatrix(matrix: ReadDepthMatrix, filePath: String, label: String = "Matrix") = WriteXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
 
-    val lines = matrix.rows.map(row => {
-      val sample: String = samples(row.index.toInt)
+    val lines = matrix.depth.rows.map(row => {
+      // TODO: Broadcast samples (or otherwise implement join)?
+      val sample: String = matrix.samples(row.index.toInt)
       val valuesAsArray = row.vector match {
         case dense: org.apache.spark.mllib.linalg.DenseVector => dense.values
         case _ => row.vector.toArray
@@ -102,7 +100,7 @@ object Deca extends Serializable with Logging {
       val headerWriter = new AsciiWriter(headOutputStream)
       try {
         headerWriter.write(label)
-        targets.foreach(target => {
+        matrix.targets.foreach(target => {
           headerWriter.write('\t')
           headerWriter.write("%s:%d-%d".format(target.referenceName, target.start + 1, target.end))
         })
@@ -120,7 +118,4 @@ object Deca extends Serializable with Logging {
     FileMerger.mergeFiles(conf, fs, new Path(filePath), new Path(bodyPath), Some(headPath))
   }
 
-  def callCnvs(reads: AlignmentRecordRDD): FeatureRDD = {
-    ???
-  }
 }

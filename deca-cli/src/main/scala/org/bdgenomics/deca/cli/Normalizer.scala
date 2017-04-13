@@ -1,6 +1,7 @@
 package org.bdgenomics.deca.cli
 
 import org.apache.spark.SparkContext
+import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.{ Deca, Normalization }
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Argument, Option => Args4jOption }
@@ -18,17 +19,7 @@ object Normalizer extends BDGCommandCompanion {
   }
 }
 
-class NormalizerArgs extends Args4jBase {
-  @Args4jOption(required = true,
-    name = "-I",
-    usage = "The XHMM read depth matrix")
-  var inputPath: String = null
-
-  @Args4jOption(required = true,
-    name = "-o",
-    usage = "The XHMM normalized and z-score centered matrix")
-  var outputPath: String = null
-
+trait NormalizeArgs {
   @Args4jOption(required = false,
     name = "-min_target_mean_RD",
     usage = "Minimum target mean read depth prior to normalization. Defaults to 10.")
@@ -60,6 +51,18 @@ class NormalizerArgs extends Args4jBase {
   var maxTargetSDRDStar: Int = 30
 }
 
+class NormalizerArgs extends Args4jBase with NormalizeArgs {
+  @Args4jOption(required = true,
+    name = "-I",
+    usage = "The XHMM read depth matrix")
+  var inputPath: String = null
+
+  @Args4jOption(required = true,
+    name = "-o",
+    usage = "The XHMM normalized and z-score centered matrix")
+  var outputPath: String = null
+}
+
 class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[NormalizerArgs] {
 
   val companion = Normalizer
@@ -68,10 +71,10 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
 
     // TODO: Read in excluded targets
     // TODO: Add in full complement of command line arguments
-    var (rdMatrix, samples, targets) = Deca.readXHMMMatrix(args.inputPath, minTargetLength = 10L, maxTargetLength = 10000L)
+    var matrix = Deca.readXHMMMatrix(args.inputPath, minTargetLength = 10L, maxTargetLength = 10000L)
 
     val (zMatrix, zTargets) = Normalization.normalizeReadDepth(
-      rdMatrix, targets,
+      matrix.depth, matrix.targets,
       minTargetMeanRD = args.minTargetMeanRD,
       maxTargetMeanRD = args.maxTargetMeanRD,
       minSampleMeanRD = args.minSampleMeanRD,
@@ -79,7 +82,7 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
       maxSampleSDRD = args.maxSampleSDRD,
       maxTargetSDRDStar = args.maxTargetSDRDStar)
 
-    Deca.writeXHMMMatrix(zMatrix, samples, zTargets, args.outputPath, label = "Matrix")
+    Deca.writeXHMMMatrix(ReadDepthMatrix(zMatrix, matrix.samples, zTargets), args.outputPath, label = "Matrix")
 
   }
 }

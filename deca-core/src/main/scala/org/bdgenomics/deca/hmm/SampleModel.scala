@@ -88,13 +88,16 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
         val (cnvEnd, cnvKind, cnvBwd) = currentCNV
 
         // Compute the various probabilities for the CNV
+        val exact = Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, cnvBwd(cnvKind)))
+
         val cnvAttr = new util.HashMap[String, String]()
         cnvAttr.put("START_TARGET", cnvStart.toString)
         cnvAttr.put("END_TARGET", cnvEnd.toString)
-        cnvAttr.put("Q_EXACT", Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, cnvBwd(cnvKind))).toString)
+        cnvAttr.put("Q_EXACT", exact.toInt.toString)
 
         val builder = Feature.newBuilder()
         builder.setFeatureType(kind2Type(cnvKind))
+        builder.setScore(exact.toDouble)
         builder.setAttributes(cnvAttr)
         features += builder.build()
 

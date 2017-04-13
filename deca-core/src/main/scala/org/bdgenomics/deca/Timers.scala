@@ -24,4 +24,7 @@ private[deca] object Timers extends Metrics {
   val ComputeSVD = timer("Compute SVD")
   val ReadDepthFilterII = timer("Filter normalized read depths by target")
   val ComputeZScores = timer("Perform z-scaling of normalized read depths")
+
+  // org.bdgenomics.deca.HMM
+  val DiscoverCNVs = timer("Discover CNVs from normalized read depth")
 }

@@ -21,7 +21,19 @@ object Coverager extends BDGCommandCompanion {
   }
 }
 
-class CoveragerArgs extends Args4jBase {
+trait CoverageArgs {
+  @Args4jOption(required = false,
+    name = "-min_mapping_quality",
+    usage = "Minimum mapping quality for read to count towards coverage")
+  var minMappingQuality: Int = 20
+
+  @Args4jOption(required = false,
+    name = "-min_base_quality",
+    usage = "Minimum base quality for base to count towards coverage")
+  var minBaseQuality: Int = 0
+}
+
+class CoveragerArgs extends Args4jBase with CoverageArgs {
   @Args4jOption(required = true,
     name = "-I",
     usage = "BAM, Parquet or other alignment files",
@@ -37,16 +49,6 @@ class CoveragerArgs extends Args4jBase {
     name = "-o",
     usage = "The XHMM read depth matrix")
   var outputPath: String = null
-
-  @Args4jOption(required = false,
-    name = "-min_mapping_quality",
-    usage = "Minimum mapping quality for read to count towards coverage")
-  var minMappingQuality: Int = 20
-
-  @Args4jOption(required = false,
-    name = "-min_base_quality",
-    usage = "Minimum base quality for base to count towards coverage")
-  var minBaseQuality: Int = 0
 }
 
 class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[CoveragerArgs] {
@@ -66,18 +68,17 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
 
     val readsRdds = args.readsPaths.asInstanceOf[Array[String]].map(path => {
       // TODO: Add push down filters
-      println("Loading " + path)
+      logInfo("Loading " + path)
       sc.loadAlignments(path, projection = Some(readProj))
     })
 
     val targetProj = Projection(FF.contigName, FF.start, FF.end)
     val targetsAsFeatures = sc.loadFeatures(args.targetsPath, projection = Some(targetProj))
 
-    var (rdMatrix, samples, targets) = Coverage.coverageMatrix(
-      readsRdds, targetsAsFeatures,
+    var matrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures,
       minMapQ = args.minMappingQuality, minBaseQ = args.minBaseQuality)
 
-    Deca.writeXHMMMatrix(rdMatrix, samples, targets, args.outputPath, label = "DECA._mean_cvg")
+    Deca.writeXHMMMatrix(matrix, args.outputPath, label = "DECA._mean_cvg")
 
   }
 }
