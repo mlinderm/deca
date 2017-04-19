@@ -20,6 +20,10 @@ case class Target(refRegion: ReferenceRegion, index: Long) {
 
 private[deca] case class TargetArray(array: Array[(ReferenceRegion, Target)], maxIntervalWidth: Long) extends IntervalArray[ReferenceRegion, Target] {
 
+  def duplicate(): IntervalArray[ReferenceRegion, Target] = {
+    copy()
+  }
+
   protected def replace(arr: Array[(ReferenceRegion, Target)], maxWidth: Long): IntervalArray[ReferenceRegion, Target] = {
     TargetArray(arr, maxWidth)
   }
@@ -38,7 +42,7 @@ private[deca] class TargetArraySerializer(kryo: Kryo) extends IntervalArraySeria
 object TargetRDD {
 
   /**
-   * Creates a FragmentRDD where no record groups or sequence info are attached.
+   * Creates a TargetRDD where no record groups or sequence info are attached.
    *
    * @param rdd RDD of fragments.
    * @return Returns a FragmentRDD with an empty record group dictionary and sequence dictionary.

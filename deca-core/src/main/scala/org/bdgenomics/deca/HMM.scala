@@ -1,6 +1,7 @@
 package org.bdgenomics.deca
 
 import org.apache.spark.SparkContext
+import org.apache.spark.storage.StorageLevel
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.deca.Timers._
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
@@ -46,6 +47,6 @@ object HMM extends Serializable with Logging {
       })
     })
 
-    FeatureRDD(cnvs)
+    FeatureRDD.inferSequenceDictionary(cnvs, optStorageLevel = Some(StorageLevel.MEMORY_ONLY_SER))
   }
 }

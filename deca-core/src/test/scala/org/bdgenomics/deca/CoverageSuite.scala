@@ -15,6 +15,7 @@ class CoverageSuite extends DecaFunSuite {
 
     val inputTargets = resourceUrl("EXOME.interval_list")
     val features = sc.loadFeatures(inputTargets.toString)
+    println(features.sequences.records)
 
     val depths = Coverage.coverageMatrix(Seq(reads), features, minMapQ = 20, minBaseQ = 0)
     assert(depths.numSamples() === 1 && depths.numTargets() === 300)

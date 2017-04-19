@@ -5,7 +5,6 @@ import breeze.stats.mean
 import htsjdk.samtools.{ CigarElement, CigarOperator }
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
-import org.apache.spark.mllib.linalg.{ Vector => SparkVector }
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
@@ -81,7 +80,8 @@ object Coverage extends Serializable with Logging {
   }
 
   def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Long, (Long, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {
-    val indexedRows = coverageCoordinates.groupByKey.map {
+    // TODO: Are there additional partitioning (or reduction) optimizations that should be applied here?
+    val indexedRows = coverageCoordinates.groupByKey(numSamples.toInt).map {
       case (sampleIdx, targetCovg) =>
         var perTargetCoverage = DenseVector.zeros[Double](numTargets.toInt)
         targetCovg.foreach {
@@ -96,6 +96,8 @@ object Coverage extends Serializable with Logging {
     // Sequence dictionary parsing is broken in current ADAM release:
     //    https://github.com/bigdatagenomics/adam/issues/1409
     // which breaks the required sorting in the creation of the TargetRDD
+    // Upgrading to a newer version of ADAM did not fix the issues as the necessary indices are not being set when
+    // the header of the interval_list is being parsed
     val orderedTargets = TargetRDD.fromRdd(targets.rdd.zipWithIndex(), targets.sequences)
     orderedTargets.rdd.cache()
 
@@ -105,11 +107,6 @@ object Coverage extends Serializable with Logging {
     val coverageCoordinates = TargetCoverage.time {
       val coverageCoordinatesPerSample = readRdds.zipWithIndex.map {
         case (readsRdd, sampleIdx) =>
-          val samples = readsRdd.recordGroups.toSamples
-          if (samples.length > 1) {
-            throw new IllegalArgumentException("reads RDD must be a single sample")
-          }
-
           // Label coverage with sample ID to create (sampleId, (targetId, coverage)) RDD
           targetCoverage(orderedTargets, readsRdd, minMapQ = minMapQ, minBaseQ = minBaseQ).map((sampleIdx.toLong, _))
       }
