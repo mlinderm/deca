@@ -20,22 +20,22 @@ object Discoverer extends BDGCommandCompanion {
 trait DiscoveryArgs {
   @Args4jOption(required = false,
     name = "-zscore_threshold",
-    usage = "Depth Z score threshold (M)")
+    usage = "Depth Z score threshold (M). Defaults to 3.")
   var M: Double = 3
 
   @Args4jOption(required = false,
     name = "-mean_targets_cnv",
-    usage = "Mean targets per CNV (T)")
+    usage = "Mean targets per CNV (T). Defaults to 6.")
   var T: Double = 6
 
   @Args4jOption(required = false,
     name = "-cnv_rate",
-    usage = "CNV rate (p)")
+    usage = "CNV rate (p). Defaults to 1e-8.")
   var p: Double = 1e-8
 
   @Args4jOption(required = false,
     name = "-mean_target_distance",
-    usage = "Mean within-CNV target distance (D)")
+    usage = "Mean within-CNV target distance (D). Defaults to 70000.")
   var D: Double = 70000
 }
 
@@ -47,7 +47,7 @@ class DiscovererArgs extends Args4jBase with DiscoveryArgs {
 
   @Args4jOption(required = true,
     name = "-o",
-    usage = "The discovered CNVs as TBD file")
+    usage = "Path to write discovered CNVs as GFF3 file")
   var outputPath: String = null
 }
 

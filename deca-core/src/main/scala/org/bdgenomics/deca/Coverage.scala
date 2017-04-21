@@ -22,9 +22,9 @@ import scala.collection.JavaConversions._
  */
 object Coverage extends Serializable with Logging {
 
-  def addReadToPileup(region: ReferenceRegion, read: RichAlignmentRecord, pileup: DenseVector[Int], minBaseQ: Int): DenseVector[Int] = {
+  def addReadToPileup(region: ReferenceRegion, read: RichAlignmentRecord): Int = {
+    var pileup: Int = 0
     var targetIdx = (read.getStart - region.start).toInt
-    var readIdx: Int = 0
     read.samtoolsCigar.foreach(cigar => {
       // TODO: can end if targetIdx >= pileup.length
       val op = cigar.getOperator
@@ -32,22 +32,21 @@ object Coverage extends Serializable with Logging {
         case (true, true) => {
           // TODO: can shift forward by a chunk if targetIdx < 0
           for (i <- 0 until cigar.getLength) {
-            if (targetIdx >= 0 && targetIdx < pileup.length && (minBaseQ == 0 || read.qualityScores(readIdx) >= minBaseQ)) {
-              pileup(targetIdx) = pileup(targetIdx) + 1
+            if (targetIdx >= 0 && targetIdx < region.length) {
+              pileup += 1
             }
             targetIdx += 1
-            readIdx += 1
           }
         }
         case (false, true)  => targetIdx += cigar.getLength
-        case (true, false)  => readIdx += cigar.getLength // May need distinguish between soft clip and insertion
+        case (true, false)  => ; // May need distinguish between soft clip and insertion
         case (false, false) => ;
       }
     })
     pileup
   }
 
-  def targetCoverage(targets: TargetRDD, reads: AlignmentRecordRDD, minMapQ: Int = 0, minBaseQ: Int = 0): RDD[(Long, Double)] = PerSampleTargetCoverage.time {
+  def targetCoverage(targets: TargetRDD, reads: AlignmentRecordRDD, minMapQ: Int = 0): RDD[(Long, Double)] = PerSampleTargetCoverage.time {
     val samples = reads.recordGroups.toSamples
     if (samples.length > 1) {
       throw new IllegalArgumentException("reads RDD must be a single sample")
@@ -66,12 +65,12 @@ object Coverage extends Serializable with Logging {
         else {
           val region = target.refRegion
           // Compute the coverage over this interval accounting for CIGAR string and any fragments
-          var pileup = DenseVector.zeros[Int](region.length.toInt)
+          var pileup: Int = 0
           reads.foreach(read => {
             // TODO: Count by fragment not by read
-            pileup = addReadToPileup(region, new RichAlignmentRecord(read), pileup, minBaseQ)
+            pileup += addReadToPileup(region, new RichAlignmentRecord(read))
           })
-          (target.index, mean(convert(pileup, Double)))
+          (target.index, pileup.toDouble / region.length)
         }
       }
     }
@@ -92,7 +91,7 @@ object Coverage extends Serializable with Logging {
     new IndexedRowMatrix(indexedRows, numSamples, numTargets.toInt)
   }
 
-  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0, minBaseQ: Int = 0): ReadDepthMatrix = ComputeReadDepths.time {
+  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0): ReadDepthMatrix = ComputeReadDepths.time {
     // Sequence dictionary parsing is broken in current ADAM release:
     //    https://github.com/bigdatagenomics/adam/issues/1409
     // which breaks the required sorting in the creation of the TargetRDD
@@ -108,7 +107,7 @@ object Coverage extends Serializable with Logging {
       val coverageCoordinatesPerSample = readRdds.zipWithIndex.map {
         case (readsRdd, sampleIdx) =>
           // Label coverage with sample ID to create (sampleId, (targetId, coverage)) RDD
-          targetCoverage(orderedTargets, readsRdd, minMapQ = minMapQ, minBaseQ = minBaseQ).map((sampleIdx.toLong, _))
+          targetCoverage(orderedTargets, readsRdd, minMapQ = minMapQ).map((sampleIdx.toLong, _))
       }
 
       val sc = SparkContext.getOrCreate()

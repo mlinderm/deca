@@ -76,7 +76,7 @@ object Deca extends Serializable with Logging {
     ReadDepthMatrix(matrix, samples, targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target })
   }
 
-  def writeXHMMMatrix(matrix: ReadDepthMatrix, filePath: String, label: String = "Matrix") = WriteXHMMMatrix.time {
+  def writeXHMMMatrix(matrix: ReadDepthMatrix, filePath: String, label: String = "Matrix", format: String = "%.8f") = WriteXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
 
     val lines = matrix.depth.rows.map(row => {
@@ -86,7 +86,8 @@ object Deca extends Serializable with Logging {
         case dense: org.apache.spark.mllib.linalg.DenseVector => dense.values
         case _ => row.vector.toArray
       }
-      valuesAsArray.mkString(start = sample + "\t", sep = "\t", end = "")
+      // Use explicit formatting to reduce storage space
+      valuesAsArray.map(format.format(_)).mkString(start = sample + "\t", sep = "\t", end = "")
     })
 
     val headPath = new Path("%s_head".format(filePath))

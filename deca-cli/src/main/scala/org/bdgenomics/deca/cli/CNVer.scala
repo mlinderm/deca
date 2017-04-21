@@ -25,28 +25,28 @@ object CNVer extends BDGCommandCompanion {
 class CNVerArgs extends Args4jBase with CoverageArgs with NormalizeArgs with DiscoveryArgs {
   @Args4jOption(required = true,
     name = "-I",
-    usage = "BAM, Parquet or other alignment files",
+    usage = "One or more BAM, Parquet or other alignment files",
     handler = classOf[StringArrayOptionHandler])
-  var readsPaths: Object = null
+  var readsPaths: Array[String] = null
 
   @Args4jOption(required = true,
     name = "-L",
-    usage = "Targets for XHMM analysis")
+    usage = "Targets for XHMM analysis as interval_list, BED or other feature file")
   var targetsPath: String = null
 
   @Args4jOption(required = true,
     name = "-o",
-    usage = "The XHMM read depth matrix")
+    usage = "Path to write discovered CNVs as GFF3 file")
   var outputPath: String = null
 
   @Args4jOption(required = false,
     name = "-save_rd",
-    usage = "Save read depth matrix")
+    usage = "Path to write XHMM read depth matrix")
   var rdPath: String = null
 
   @Args4jOption(required = false,
     name = "-save_zscores",
-    usage = "Save normalized, filtered, Z score matrix")
+    usage = "Path to write XHMM normalized, filtered, Z score matrix")
   var zScorePath: String = null
 }
 
@@ -58,13 +58,10 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
     val readProj = {
       // TODO: Add mate fields when coverage incorporates fragment features
       var readFields = Seq(ARF.readMapped, ARF.mapq, ARF.contigName, ARF.start, ARF.end, ARF.cigar)
-      if (args.minBaseQuality > 0) {
-        readFields :+ ARF.qual
-      }
       Projection(readFields)
     }
 
-    val readsRdds = args.readsPaths.asInstanceOf[Array[String]].map(path => {
+    val readsRdds = args.readsPaths.map(path => {
       // TODO: Add push down filters
       logInfo("Loading " + path)
       sc.loadAlignments(path, projection = Some(readProj))
@@ -76,8 +73,7 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
     }
 
     // 2. Compute coverage
-    val rdMatrix = Coverage.coverageMatrix(
-      readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality, minBaseQ = args.minBaseQuality)
+    val rdMatrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality)
     if (args.rdPath != null) {
       Deca.writeXHMMMatrix(rdMatrix, args.rdPath, label = "DECA._mean_cvg")
     }

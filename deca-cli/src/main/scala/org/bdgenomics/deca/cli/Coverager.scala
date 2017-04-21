@@ -24,30 +24,26 @@ object Coverager extends BDGCommandCompanion {
 trait CoverageArgs {
   @Args4jOption(required = false,
     name = "-min_mapping_quality",
-    usage = "Minimum mapping quality for read to count towards coverage")
+    usage = "Minimum mapping quality for read to count towards coverage. Defaults to 20.")
   var minMappingQuality: Int = 20
 
-  @Args4jOption(required = false,
-    name = "-min_base_quality",
-    usage = "Minimum base quality for base to count towards coverage")
-  var minBaseQuality: Int = 0
 }
 
 class CoveragerArgs extends Args4jBase with CoverageArgs {
   @Args4jOption(required = true,
     name = "-I",
-    usage = "BAM, Parquet or other alignment files",
+    usage = "One or more BAM, Parquet or other alignment files",
     handler = classOf[StringArrayOptionHandler])
-  var readsPaths: Object = null
+  var readsPaths: Array[String] = null
 
   @Args4jOption(required = true,
     name = "-L",
-    usage = "Targets for XHMM analysis")
+    usage = "Targets for XHMM analysis as interval_list, BED or other feature file")
   var targetsPath: String = null
 
   @Args4jOption(required = true,
     name = "-o",
-    usage = "The XHMM read depth matrix")
+    usage = "Path to write XHMM read depth matrix")
   var outputPath: String = null
 }
 
@@ -60,13 +56,10 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
     val readProj = {
       // TODO: Add mate fields when coverage incorporates fragment features
       var readFields = Seq(ARF.readMapped, ARF.mapq, ARF.contigName, ARF.start, ARF.end, ARF.cigar)
-      if (args.minBaseQuality > 0) {
-        readFields :+ ARF.qual
-      }
       Projection(readFields)
     }
 
-    val readsRdds = args.readsPaths.asInstanceOf[Array[String]].map(path => {
+    val readsRdds = args.readsPaths.map(path => {
       // TODO: Add push down filters
       logInfo("Loading " + path)
       sc.loadAlignments(path, projection = Some(readProj))
@@ -75,10 +68,9 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
     val targetProj = Projection(FF.contigName, FF.start, FF.end)
     val targetsAsFeatures = sc.loadFeatures(args.targetsPath, projection = Some(targetProj))
 
-    var matrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures,
-      minMapQ = args.minMappingQuality, minBaseQ = args.minBaseQuality)
+    var matrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality)
 
-    Deca.writeXHMMMatrix(matrix, args.outputPath, label = "DECA._mean_cvg")
+    Deca.writeXHMMMatrix(matrix, args.outputPath, label = "DECA._mean_cvg", format = "%.2f")
 
   }
 }

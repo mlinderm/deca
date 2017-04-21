@@ -59,7 +59,7 @@ class NormalizerArgs extends Args4jBase with NormalizeArgs {
 
   @Args4jOption(required = true,
     name = "-o",
-    usage = "The XHMM normalized and z-score centered matrix")
+    usage = "Path to write XHMM normalized, filtered, Z score matrix")
   var outputPath: String = null
 }
 
