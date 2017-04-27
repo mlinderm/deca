@@ -6,6 +6,7 @@ import htsjdk.samtools.{ CigarElement, CigarOperator }
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLContext
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
@@ -17,36 +18,17 @@ import org.bdgenomics.utils.misc.Logging
 
 import scala.collection.JavaConversions._
 
+case class CoverageByTarget(targetId: Long, coverage: Double) {
+}
+
 /**
  * Created by mlinderman on 3/8/17.
  */
 object Coverage extends Serializable with Logging {
 
-  def addReadToPileup(region: ReferenceRegion, read: RichAlignmentRecord): Int = {
-    var pileup: Int = 0
-    var targetIdx = (read.getStart - region.start).toInt
-    read.samtoolsCigar.foreach(cigar => {
-      // TODO: can end if targetIdx >= pileup.length
-      val op = cigar.getOperator
-      (op.consumesReadBases, op.consumesReferenceBases) match {
-        case (true, true) => {
-          // TODO: can shift forward by a chunk if targetIdx < 0
-          for (i <- 0 until cigar.getLength) {
-            if (targetIdx >= 0 && targetIdx < region.length) {
-              pileup += 1
-            }
-            targetIdx += 1
-          }
-        }
-        case (false, true)  => targetIdx += cigar.getLength
-        case (true, false)  => ; // May need distinguish between soft clip and insertion
-        case (false, false) => ;
-      }
-    })
-    pileup
-  }
-
-  def targetCoverage(targets: TargetRDD, reads: AlignmentRecordRDD, minMapQ: Int = 0): RDD[(Long, Double)] = PerSampleTargetCoverage.time {
+  def targetCoverage(targets: TargetRDD,
+                     reads: AlignmentRecordRDD,
+                     minMapQ: Int = 0): RDD[(Long, Double)] = PerSampleTargetCoverage.time {
     val samples = reads.recordGroups.toSamples
     if (samples.length > 1) {
       throw new IllegalArgumentException("reads RDD must be a single sample")
@@ -58,24 +40,22 @@ object Coverage extends Serializable with Logging {
     }))
 
     // Compute left outer join of targets with reads through combination of inner join and co-group
-    val coverage = targets.shuffleRegionJoin(filteredReads).rdd.groupByKey().map {
-      case (target, reads) => {
-        if (reads.isEmpty)
-          (target.index, 0.0)
-        else {
-          val region = target.refRegion
-          // Compute the coverage over this interval accounting for CIGAR string and any fragments
-          var pileup: Int = 0
-          reads.foreach(read => {
-            // TODO: Count by fragment not by read
-            pileup += addReadToPileup(region, new RichAlignmentRecord(read))
-          })
-          (target.index, pileup.toDouble / region.length)
-        }
-      }
-    }
+    val coverageRdd = targets.broadcastRegionJoin(filteredReads).rdd.map(kv => {
+      val (target, read) = kv
+      CoverageByTarget(target.index,
+        ReferenceRegion.unstranded(read).intersection(target.refRegion).width.toDouble / target.refRegion.width.toDouble)
+    })
 
-    coverage
+    val sqlContext = SQLContext.getOrCreate(coverageRdd.context)
+    import sqlContext.implicits._
+    val coverageDs = sqlContext.createDataset(coverageRdd)
+
+    val coverageByTargetDs = coverageDs.groupBy(coverageDs("targetId"))
+      .sum("coverage")
+
+    coverageByTargetDs.rdd.map(row => {
+      (row.getLong(0), row.getDouble(1))
+    })
   }
 
   def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Long, (Long, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {

@@ -9,7 +9,7 @@ import org.bdgenomics.deca.util.MLibUtils
  */
 class CoverageSuite extends DecaFunSuite {
 
-  sparkTest("computes coverage for targets") {
+  ignore("computes coverage for targets") {
     val inputBam = resourceUrl("HG00107_target1.bam")
     val reads = sc.loadAlignments(inputBam.toString)
 
