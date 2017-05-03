@@ -1,11 +1,10 @@
 package org.bdgenomics.deca
 
-import breeze.linalg.{ DenseVector, convert, min }
-import breeze.stats.mean
-import htsjdk.samtools.{ CigarElement, CigarOperator }
+import breeze.linalg.{ DenseVector }
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SQLContext
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
@@ -16,31 +15,32 @@ import org.bdgenomics.deca.Timers._
 import org.bdgenomics.utils.misc.Logging
 
 import scala.collection.JavaConversions._
+import scala.math.{ max, min }
 
 /**
  * Created by mlinderman on 3/8/17.
  */
+
+case class CoverageByTarget(targetId: Long, coverage: Double) {
+}
+
 object Coverage extends Serializable with Logging {
 
-  def addReadToPileup(region: ReferenceRegion, read: RichAlignmentRecord): Int = {
-    var pileup: Int = 0
-    var targetIdx = (read.getStart - region.start).toInt
+  def addReadToPileup(region: ReferenceRegion, read: RichAlignmentRecord): Long = {
+    var pileup: Long = 0
+    var readStart = read.getStart
     read.samtoolsCigar.foreach(cigar => {
-      // TODO: can end if targetIdx >= pileup.length
       val op = cigar.getOperator
       (op.consumesReadBases, op.consumesReferenceBases) match {
         case (true, true) => {
-          // TODO: can shift forward by a chunk if targetIdx < 0
-          for (i <- 0 until cigar.getLength) {
-            if (targetIdx >= 0 && targetIdx < region.length) {
-              pileup += 1
-            }
-            targetIdx += 1
+          var overlap = min(region.end, readStart + cigar.getLength) - max(region.start, readStart)
+          if (overlap > 0) {
+            pileup += overlap
           }
+          readStart += cigar.getLength
         }
-        case (false, true)  => targetIdx += cigar.getLength
-        case (true, false)  => ; // May need distinguish between soft clip and insertion
-        case (false, false) => ;
+        case (true, false) if (op.isIndel) => readStart += cigar.getLength; // Need distinguish between soft clip and insertion
+        case (_, _)                        => ;
       }
     })
     pileup
@@ -57,25 +57,26 @@ object Coverage extends Serializable with Logging {
       !read.getDuplicateRead && read.getReadMapped && (minMapQ == 0 || read.getMapq >= minMapQ)
     }))
 
-    // Compute left outer join of targets with reads through combination of inner join and co-group
-    val coverage = targets.shuffleRegionJoin(filteredReads).rdd.groupByKey().map {
-      case (target, reads) => {
-        if (reads.isEmpty)
-          (target.index, 0.0)
-        else {
-          val region = target.refRegion
-          // Compute the coverage over this interval accounting for CIGAR string and any fragments
-          var pileup: Int = 0
-          reads.foreach(read => {
-            // TODO: Count by fragment not by read
-            pileup += addReadToPileup(region, new RichAlignmentRecord(read))
-          })
-          (target.index, pileup.toDouble / region.length)
-        }
+    // Compute join of targets with reads
+    val coverageRdd = targets.broadcastRegionJoin(filteredReads).rdd.map {
+      case (target, read) => {
+        val region = target.refRegion
+        // Compute the coverage over this interval accounting for CIGAR string and any fragments
+        var pileup = addReadToPileup(region, new RichAlignmentRecord(read))
+        CoverageByTarget(target.index, pileup.toDouble / region.length)
       }
     }
 
-    coverage
+    // TODO: Return table with target and sample ID to enable different matrices to be generated
+    val sqlContext = SQLContext.getOrCreate(coverageRdd.context)
+    import sqlContext.implicits._
+    val coverageDs = sqlContext.createDataset(coverageRdd)
+
+    val coverageByTargetDs = coverageDs.groupBy(coverageDs("targetId")).sum("coverage")
+
+    coverageByTargetDs.rdd.map(row => {
+      (row.getLong(0), row.getDouble(1))
+    })
   }
 
   def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Long, (Long, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {

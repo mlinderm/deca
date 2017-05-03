@@ -56,7 +56,7 @@ Rd <- Rd[samples_to_keep,]
 Rd <- scale(Rd, center=T, scale=F)  # Mean center columns
 
 # Perform SVD decomposition (xhmm --PCA)
-decomp <- La.svd(Rd)  # To compute V_t
+decomp <- La.svd(Rd, nu=0)  # To compute V_t
 
 # vt is _PCA.PC_SD.txt
 # d is _PCA.PC.txt
@@ -68,7 +68,7 @@ decomp <- La.svd(Rd)  # To compute V_t
 # Normalize mean-centered data using PCA data
 # TODO: Compute total variance without computing all SVD components?
 pc_var <- decomp$d**2
-scaled_mean_var <- (sum(pc_var) / length(pc_var)) * PVE_mean_factor
+scaled_mean_var <- mean(pc_var) * PVE_mean_factor
 to_remove <- pc_var >= scaled_mean_var
 
 # Should remove first 3 components
@@ -103,3 +103,12 @@ Z <- t(apply(Rd_star, 1, scale))
 colnames(Z) <- colnames(Rd_star)
 
 # Z is .PCA_normalized.filtered.sample_zscores.RD.txt
+
+# Experiments with bounding mean variance
+bounded_mean_pc_var <- rep_len(0, length(pc_var))
+bounded_to_remove <- rep_len(0, length(pc_var))
+for (i in 1:length(pc_var)) {
+  bounded_mean_pc_var[i] <- mean(c(pc_var[1:i], rep_len(pc_var[i], length(pc_var)-i)))
+  bounded_to_remove[i] <- sum(pc_var >= PVE_mean_factor * bounded_mean_pc_var[i])
+}
+

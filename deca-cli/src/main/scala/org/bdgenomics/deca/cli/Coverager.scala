@@ -1,5 +1,6 @@
 package org.bdgenomics.deca.cli
 
+import htsjdk.samtools.ValidationStringency
 import org.apache.spark.SparkContext
 import org.bdgenomics.adam.projections.{ AlignmentRecordField => ARF, FeatureField => FF }
 import org.bdgenomics.adam.projections.Projection
@@ -61,8 +62,8 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
 
     val readsRdds = args.readsPaths.map(path => {
       // TODO: Add push down filters
-      logInfo("Loading " + path)
-      sc.loadAlignments(path, projection = Some(readProj))
+      log.info("Loading {}", path)
+      sc.loadAlignments(path, projection = Some(readProj), stringency = ValidationStringency.SILENT)
     })
 
     val targetProj = Projection(FF.contigName, FF.start, FF.end)

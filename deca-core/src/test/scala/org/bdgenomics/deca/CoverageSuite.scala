@@ -21,7 +21,7 @@ class CoverageSuite extends DecaFunSuite {
 
     val matrix = MLibUtils.mllibMatrixToDenseBreeze(depths.depth)
 
-    assert(abs(matrix(0, 0) - 18.31) < .05) // Should be target 22:16448824-16449023
+    assert(abs(matrix(0, 0) - 18.31) < .005) // Should be target 22:16448824-16449023
     assert(matrix(0, 1) > 0) // There are reads overlapping next target
     assert(matrix(0, 2) === 0.0)
   }
