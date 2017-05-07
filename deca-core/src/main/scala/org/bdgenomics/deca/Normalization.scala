@@ -62,24 +62,28 @@ object Normalization extends Serializable with Logging {
   }
 
   def pcaNormalization(readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = PCANormalization.time {
+    // Compute top k components, where k is (currently) 0.2 * n
+    val n = Math.min(readMatrix.numRows, readMatrix.numCols)
     val svd = ComputeSVD.time {
-      readMatrix.computeSVD(Math.min(readMatrix.numRows, readMatrix.numCols).toInt, computeU = false)
+      readMatrix.computeSVD(0.2*n, computeU = false)
     }
 
     // Determine components to remove
     var toRemove = svd.s.size
     breakable {
-      val S = MLibUtils.mllibVectorToDenseBreeze(svd.s)
+      val kUsed = svd.s.size/2
+      val S = MLibUtils.mllibVectorToDenseBreeze(svd.s.slice(0, kUsed))
       val componentVar = S :* S
-      val cutoff: Double = (sum(componentVar) / componentVar.length) * pveMeanFactor
-      for (c <- 0 until componentVar.length) {
+      val componentSum: Double = sum(componentVar) + ((n - kUsed) * svd.s(kUsed+1))
+      val cutoff: Double = (componentSum / n) * pveMeanFactor
+      for (c <- 0 until kUsed) {
         if (componentVar(c) < cutoff) {
           toRemove = c
           break
         }
       }
     }
-    log.info("Removing top {} components in PCA normalization", toRemove)
+    log.info("Removing top %d components in PCA normalization", toRemove)
 
     val V = MLibUtils.mllibMatrixToDenseBreeze(svd.V)
 
