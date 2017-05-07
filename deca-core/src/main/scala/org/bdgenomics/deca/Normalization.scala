@@ -83,7 +83,7 @@ object Normalization extends Serializable with Logging {
         }
       }
     }
-    log.info("Removing top %d components in PCA normalization", toRemove)
+    log.info("Removing top {} components in PCA normalization", toRemove)
 
     val V = MLibUtils.mllibMatrixToDenseBreeze(svd.V)
 
