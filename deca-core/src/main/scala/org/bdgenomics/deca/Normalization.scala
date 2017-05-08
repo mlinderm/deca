@@ -65,7 +65,7 @@ object Normalization extends Serializable with Logging {
     // Compute top k components, where k is (currently) 0.2 * n
     val n = Math.min(readMatrix.numRows, readMatrix.numCols)
     val svd = ComputeSVD.time {
-      readMatrix.computeSVD(0.2*n, computeU = false)
+      readMatrix.computeSVD((0.2*n).ceil.toInt, computeU = false)
     }
 
     // Determine components to remove
