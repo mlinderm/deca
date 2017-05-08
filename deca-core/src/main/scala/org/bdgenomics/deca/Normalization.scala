@@ -72,7 +72,9 @@ object Normalization extends Serializable with Logging {
     var toRemove = svd.s.size
     breakable {
       val kUsed = svd.s.size/2
-      val S = MLibUtils.mllibVectorToDenseBreeze(svd.s.take(kUsed))
+      val array: Array[Double] = svd.s.toArray().take(kUsed)
+      val S = MLibUtils.mllibVectorToDenseBreeze(Vectors.dense(array))
+
       val componentVar = S :* S
       val componentSum: Double = sum(componentVar) + ((n - kUsed) * svd.s(kUsed+1))
       val cutoff: Double = (componentSum / n) * pveMeanFactor

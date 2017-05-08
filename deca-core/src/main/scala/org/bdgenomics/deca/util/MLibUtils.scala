@@ -7,6 +7,8 @@ import breeze.linalg.{ DenseMatrix, DenseVector, SliceVector, SparseVector }
  */
 object MLibUtils {
 
+  //def mllibVectorTake(vector: org.apache.spark.mllib.linalg.Vector):
+
   /** Convert an MLlib vector to a Breeze dense vector */
   def mllibVectorToDenseBreeze(vector: org.apache.spark.mllib.linalg.Vector): DenseVector[Double] = {
     vector match {
