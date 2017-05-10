@@ -71,12 +71,15 @@ object Normalization extends Serializable with Logging {
     // Determine components to remove
     var toRemove = svd.s.size
     breakable {
-      val kUsed = svd.s.size/2
+      val kUsed = svd.s.size/2.ceil.toInt
+      print(kUsed)
+      print(svd.s)
       val S = MLibUtils.mllibVectorToDenseBreeze(svd.s)
       val componentVar = S :* S
       //Either need to sum up the first kUsed components of componentVar
       //Or need to slice it before converting...
-      val componentSum: Double = sum(componentVar(1 to kUsed)) + ((n - kUsed) * componentVar(kUsed+1))
+      print(componentVar)
+      val componentSum: Double = sum(componentVar(0 to kUsed)) + ((n - kUsed) * componentVar(kUsed+1))
       val cutoff: Double = (componentSum / n) * pveMeanFactor
       for (c <- 0 until kUsed) {
         if (componentVar(c) < cutoff) {
