@@ -82,7 +82,7 @@ object Normalization extends Serializable with Logging {
       //Or need to slice it before converting...
       println(componentVar)
       println(componentVar(0 to kUsed))
-      val componentSum: Double
+      val componentSum: Double = 0
       if(kUsed+1 <= svd.s.size) {
         componentSum = sum(componentVar(0 to kUsed)) + ((n - kUsed) * componentVar(kUsed+1))
       } else {
