@@ -76,7 +76,7 @@ object Normalization extends Serializable with Logging {
       val componentVar = S :* S
       //Either need to sum up the first kUsed components of componentVar
       //Or need to slice it before converting...
-      val componentSum: Double = sum(componentVar(0 to kUsed)) + ((n - kUsed) * componentVar(kUsed+1))
+      val componentSum: Double = sum(componentVar(1 to kUsed)) + ((n - kUsed) * componentVar(kUsed+1))
       val cutoff: Double = (componentSum / n) * pveMeanFactor
       for (c <- 0 until kUsed) {
         if (componentVar(c) < cutoff) {
