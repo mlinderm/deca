@@ -90,7 +90,7 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
     }
 
     // 4. Discover CNVs
-    var features = HMM.discoverCNVs(zMatrix, M = args.M, T = args.T, p = args.p, D = args.D)
+    var features = HMM.discoverCNVs(zMatrix, M = args.M, T = args.T, p = args.p, D = args.D, minSomeQuality = args.minSomeQuality)
     features.saveAsGff3(args.outputPath, asSingleFile = true)
   }
 }

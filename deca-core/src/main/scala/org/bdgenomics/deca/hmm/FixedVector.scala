@@ -19,6 +19,10 @@ class FixedVector(val v0: BigDecimal, val v1: BigDecimal, val v2: BigDecimal) {
     new FixedVector(v0 * that.v0, v1 * that.v1, v2 * that.v2)
   }
 
+  def *(that: FixedVector): BigDecimal = {
+    v0 * that.v0 + v1 * that.v1 + v2 * that.v2
+  }
+
   def *(that: FixedMatrix): FixedVector = {
     new FixedVector(
       v0 * that.v0_0 + v1 * that.v1_0 + v2 * that.v2_0,
@@ -44,4 +48,6 @@ object FixedVector {
   def apply(v0: Double, v1: Double, v2: Double): FixedVector = {
     new FixedVector(v0, v1, v2)
   }
+
+  val ONES = FixedVector(1.0, 1.0, 1.0)
 }

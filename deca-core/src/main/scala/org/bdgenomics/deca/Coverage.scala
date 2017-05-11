@@ -33,7 +33,7 @@ object Coverage extends Serializable with Logging {
       val op = cigar.getOperator
       (op.consumesReadBases, op.consumesReferenceBases) match {
         case (true, true) => {
-          var overlap = min(region.end, readStart + cigar.getLength) - max(region.start, readStart)
+          val overlap = min(region.end, readStart + cigar.getLength) - max(region.start, readStart)
           if (overlap > 0) {
             pileup += overlap
           }

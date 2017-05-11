@@ -2,6 +2,7 @@ package org.bdgenomics.deca
 
 import breeze.linalg.DenseMatrix
 import breeze.numerics.abs
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.hmm.{ FixedMatrix, TransitionProbabilities }
 
@@ -28,10 +29,22 @@ class HMMSuite extends DecaFunSuite {
 
     {
       val expTrans = Array[Double](
-        0.8333214286, 1.0e-8, 1.4285612245e-13, 0.1666785713, 0.99999998000, 0.1666785713, 1.4285612245e-13, 1.0e-8, 0.8333214286)
+        0.8333214286, 1.0e-8, 1.4285612245e-13, 0.1666785713, 1 - 2 * 1.0e-8, 0.1666785713, 1.4285612245e-13, 1.0e-8, 0.8333214286)
       assert(aboutEq(transProb.matrix(1), expTrans))
     }
 
+  }
+
+  sparkTest("Handles contig boundaries in computing transition matrix") {
+    val transProb = TransitionProbabilities(Array(
+      new ReferenceRegion("1", 249230845, 249231325),
+      new ReferenceRegion("2", 41527, 41677)), D = 70000, p = 1.0e-8, q = 1.0 / 6.0)
+
+    {
+      val expTrans = Array[Double](
+        1.0e-8, 1.0e-8, 1.0e-8, 1 - 2 * 1.0e-8, 1 - 2 * 1.0e-8, 1 - 2 * 1.0e-8, 1.0e-8, 1.0e-8, 1.0e-8)
+      assert(aboutEq(transProb.matrix(1), expTrans))
+    }
   }
 
   sparkTest("Discovers CNVs") {

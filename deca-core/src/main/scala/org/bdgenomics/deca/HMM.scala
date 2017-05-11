@@ -14,7 +14,7 @@ import org.bdgenomics.utils.misc.Logging
  */
 object HMM extends Serializable with Logging {
 
-  def discoverCNVs(readMatrix: ReadDepthMatrix, M: Double = 3, T: Double = 6, p: Double = 1e-8, D: Double = 70000): FeatureRDD = DiscoverCNVs.time {
+  def discoverCNVs(readMatrix: ReadDepthMatrix, M: Double = 3, T: Double = 6, p: Double = 1e-8, D: Double = 70000, minSomeQuality: Double = 30.0): FeatureRDD = DiscoverCNVs.time {
     val sc = SparkContext.getOrCreate()
 
     // Generate transition probabilities from targets
@@ -29,12 +29,15 @@ object HMM extends Serializable with Logging {
       val model = SampleModel(obs.vector, transProb.value, M, p)
 
       // Discover CNVs
-      val per_sample_cnvs = model.discoverCNVs()
+      val per_sample_cnvs = model.discoverCNVs(minSomeQuality)
       per_sample_cnvs.map(raw_feature => {
         val attr = raw_feature.getAttributes
 
-        val start_target = targets.value(attr.get("START_TARGET").toInt)
-        val end_target = targets.value(attr.get("END_TARGET").toInt)
+        val start_index = attr.get("START_TARGET").toInt
+        val end_index = attr.get("END_TARGET").toInt
+
+        val start_target = targets.value(start_index)
+        val end_target = targets.value(end_index)
 
         // TODO: Filter out contig spanning CNVs
 
@@ -43,6 +46,13 @@ object HMM extends Serializable with Logging {
         builder.setContigName(start_target.referenceName)
         builder.setStart(start_target.start)
         builder.setEnd(end_target.end)
+
+        // Transform START_TARGET and END_TARGET to be 1-indexed
+        attr.put("START_TARGET", (start_index + 1).toString)
+        attr.put("END_TARGET", (end_index + 1).toString)
+
+        builder.setAttributes(attr)
+
         builder.build()
       })
     })

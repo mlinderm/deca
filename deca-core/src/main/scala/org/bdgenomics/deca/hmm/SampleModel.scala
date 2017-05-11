@@ -34,12 +34,30 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     }
   }
 
+  private def emitDistExclude(t: Int, kind: Int): FixedVector = {
+    val my_obs = obs(t)
+    kind match {
+      case 0 => FixedVector(0.0, dipDist.density(my_obs), dupDist.density(my_obs))
+      case 1 => FixedVector(delDist.density(my_obs), 0.0, dupDist.density(my_obs))
+      case 2 => FixedVector(delDist.density(my_obs), dipDist.density(my_obs), 0.0)
+      case _ => throw new IndexOutOfBoundsException(kind + " not in 0-2")
+    }
+  }
+
   private def kind2Type(kind: Int) = {
     kind match {
       case 0 => "DEL"
       case 1 => "DIP"
       case 2 => "DUP"
       case _ => throw new IndexOutOfBoundsException(kind + " not in 0-2")
+    }
+  }
+
+  private def excludeType(kind: Int) = {
+    kind match {
+      case 0 => 2
+      case 2 => 0
+      case _ => throw new IndexOutOfBoundsException(kind + " not 0 or 2")
     }
   }
 
@@ -57,52 +75,87 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
 
   lazy val totalLikelihood = fwdCache(obs.length - 1).sum()
 
-  def exact_probability(t1: Int, t2: Int, kind: Int, bwd: BigDecimal): BigDecimal = {
-    var prob = fwdCache(t1)(kind) * bwd
+  def exact_probability(t1: Int, t2: Int, kind: Int, bwd: FixedVector): BigDecimal = {
+    var prob = fwdCache(t1)(kind) * bwd(kind)
     for (t <- t1 + 1 to t2) {
       prob *= transProb.edge(t, kind, kind) * emitDist(t, kind)
     }
     prob / totalLikelihood
   }
 
-  def discoverCNVs(): Seq[Feature] = {
+  def exclude_probability(t1: Int, t2: Int, exclude: Int, bwd: FixedVector) = {
+    var fwd = fwdCache(t1 - 1)
+    for (t <- t1 to t2) {
+      val trans = transProb.matrix(t)
+      fwd = (fwd * trans) :* emitDistExclude(t, exclude)
+    }
+    (fwd * bwd) / totalLikelihood
+  }
+
+  def stop_probability(t2: Int, kind: Int, bwd: FixedVector): BigDecimal = {
+    try {
+      fwdCache(t2)(kind) * transProb.edge(t2 + 1, kind, 1) * emitDist(t2 + 1, 1) * bwd(1) / totalLikelihood
+    } catch {
+      case div0: ArithmeticException                     => 0.0
+      case end: java.lang.ArrayIndexOutOfBoundsException => 0.0
+    }
+  }
+
+  def start_probability(t1: Int, kind: Int, bwd: FixedVector): BigDecimal = {
+    fwdCache(t1 - 1)(1) * transProb.edge(t1, 1, kind) * emitDist(t1, kind) * bwd(kind) / totalLikelihood
+  }
+
+  def discoverCNVs(minSomeQuality: Double, qualFormat: String = "%.0f"): Seq[Feature] = {
     val features = scala.collection.mutable.ArrayBuffer.empty[Feature]
 
     // Compute backward probabilities without backward caching while looking for CNVs
-    var prevBwd = FixedVector(1.0, 1.0, 1.0)
-    var currentCNV: (Int, Int, FixedVector) = null
+    var prevBwd = FixedVector.ONES
+    var currentCNV: (Int, Int, FixedVector, BigDecimal) = null
 
-    for (t <- (0 until obs.length - 1).reverse) {
-      val trans = transProb.matrix(t + 1)
-
-      val bwd = trans * (emitDist(t + 1) :* prevBwd)
+    for (t <- (0 until obs.length).reverse) {
+      val bwd = if (t == obs.length - 1) {
+        FixedVector.ONES
+      } else {
+        val trans = transProb.matrix(t + 1)
+        trans * (emitDist(t + 1) :* prevBwd)
+      }
       val gamma = fwdCache(t) :* bwd
 
       val kind = gamma.argmax()
       if (kind != 1 && currentCNV == null) {
         // Start of a new CNV
-        currentCNV = (t, kind, bwd)
+        currentCNV = (t, kind, bwd, Phred.phred(stop_probability(t, kind, prevBwd)))
       } else if (currentCNV != null && kind != currentCNV._2) {
         // End of a CNV and possibly the start of another
         val cnvStart = t + 1
-        val (cnvEnd, cnvKind, cnvBwd) = currentCNV
+        val (cnvEnd, cnvKind, cnvBwd, stopPhredPr) = currentCNV
 
         // Compute the various probabilities for the CNV
-        val exact = Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, cnvBwd(cnvKind)))
+        val exactPhredPr = Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, cnvBwd))
+        val dipPr = exact_probability(cnvStart, cnvEnd, 1, cnvBwd) // 1 => DIP
+        val somePhredPr = Phred.phred(exclude_probability(cnvStart, cnvEnd, excludeType(cnvKind), cnvBwd) - dipPr)
+        val startPhredPr = Phred.phred(start_probability(cnvStart, cnvKind, prevBwd))
 
-        val cnvAttr = new util.HashMap[String, String]()
-        cnvAttr.put("START_TARGET", cnvStart.toString)
-        cnvAttr.put("END_TARGET", cnvEnd.toString)
-        cnvAttr.put("Q_EXACT", exact.toInt.toString)
+        if (somePhredPr >= minSomeQuality) {
+          val cnvAttr = new util.HashMap[String, String]()
+          cnvAttr.put("START_TARGET", cnvStart.toString)
+          cnvAttr.put("END_TARGET", cnvEnd.toString)
+          cnvAttr.put("Q_EXACT", qualFormat.format(exactPhredPr))
+          cnvAttr.put("Q_SOME", qualFormat.format(somePhredPr))
+          cnvAttr.put("Q_NON_DIPLOID", qualFormat.format(Phred.phred(1.0 - dipPr)))
+          cnvAttr.put("Q_START", qualFormat.format(startPhredPr))
+          cnvAttr.put("Q_STOP", qualFormat.format(stopPhredPr))
 
-        val builder = Feature.newBuilder()
-        builder.setFeatureType(kind2Type(cnvKind))
-        builder.setScore(exact.toDouble)
-        builder.setAttributes(cnvAttr)
-        features += builder.build()
+          val builder = Feature.newBuilder()
+          builder.setFeatureType(kind2Type(cnvKind))
+          builder.setScore(exactPhredPr)
+          builder.setAttributes(cnvAttr)
+
+          features += builder.build()
+        }
 
         // Are we back to diploid, or did we start another different CNV
-        currentCNV = if (kind != 1) (t, kind, bwd) else null
+        currentCNV = if (kind != 1) (t, kind, bwd, Phred.phred(stop_probability(t, kind, prevBwd))) else null
       }
 
       prevBwd = bwd

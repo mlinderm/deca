@@ -44,8 +44,10 @@ object TransitionProbabilities {
   def apply(targets: Array[ReferenceRegion], D: Double, p: Double, q: Double): TransitionProbabilities = {
     val f = new Array[Double](targets.length)
     (1 until f.length).foreach(i => {
-      // TODO: Special handling of contig boundaries?
-      f(i) = math.exp(-(targets(i).start - targets(i - 1).end) / D)
+      f(i) = targets(i - 1).distance(targets(i)) match {
+        case Some(dist) => math.exp(-(dist - 1).toDouble / D) // XHMM is inc. start - inc. end - 1
+        case None       => 0.0 // "Infinite" distance
+      }
     })
     new TransitionProbabilities(f, p, q)
   }

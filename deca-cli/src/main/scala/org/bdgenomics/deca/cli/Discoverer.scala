@@ -37,6 +37,11 @@ trait DiscoveryArgs {
     name = "-mean_target_distance",
     usage = "Mean within-CNV target distance (D). Defaults to 70000.")
   var D: Double = 70000
+
+  @Args4jOption(required = false,
+    name = "-mean_some_quality",
+    usage = "Min Q_SOME to discover a CNV. Defaults to 30.0.")
+  var minSomeQuality: Double = 30.0
 }
 
 class DiscovererArgs extends Args4jBase with DiscoveryArgs {
@@ -56,7 +61,7 @@ class Discoverer(protected val args: DiscovererArgs) extends BDGSparkCommand[Dis
 
   def run(sc: SparkContext): Unit = {
     var matrix = Deca.readXHMMMatrix(args.inputPath)
-    var features = HMM.discoverCNVs(matrix, M = args.M, T = args.T, p = args.p, D = args.D)
+    var features = HMM.discoverCNVs(matrix, M = args.M, T = args.T, p = args.p, D = args.D, minSomeQuality = args.minSomeQuality)
     features.saveAsGff3(args.outputPath, asSingleFile = true)
   }
 }
