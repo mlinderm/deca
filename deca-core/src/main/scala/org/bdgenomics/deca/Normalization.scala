@@ -64,23 +64,27 @@ object Normalization extends Serializable with Logging {
   def pcaNormalization(readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = PCANormalization.time {
     // Compute top k components, where k is (currently) 0.2 * n
     val n = Math.min(readMatrix.numRows, readMatrix.numCols)
-    val svd = ComputeSVD.time {
+    val ksvd = ComputeSVD.time {
       readMatrix.computeSVD((0.2*n).ceil.toInt, computeU = false)
     }
+    val svd = ComputeSVD.time {
+      readMatrix.computeSVD(Math.min(readMatrix.numRows, readMatrix.numCols).toInt, computeU = false)
+    }
+
+    print(ksvd.s)
+    print(svd.s)
 
     // Determine components to remove
     var toRemove = svd.s.size
     breakable {
-      val kUsed = svd.s.size/2
-      val S = MLibUtils.mllibVectorToDenseBreeze(svd.s)
+      kUsed = ksvd.s.size - 1
+      val S = MLibUtils.mllibVectorToDenseBreeze(ksvd.s)
       val componentVar = S :* S
-      //Either need to sum up the first kUsed components of componentVar
-      //Or need to slice it before converting...
       var componentSum: Double = 0
-      if(kUsed+1 < svd.s.size) {
-        componentSum = sum(componentVar(0 to kUsed)) + ((n - kUsed) * componentVar(kUsed+1))
+      if (kUsed > 0) {
+        componentSum = sum(componentVar(0 to kUsed-1)) + ((n - kUsed) * componentVar(kUsed))
       } else {
-        componentSum = sum(componentVar)
+        componentSum = n * componentVar(0)
       }
       
       val cutoff: Double = (componentSum / n) * pveMeanFactor
