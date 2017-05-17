@@ -68,21 +68,21 @@ object Normalization extends Serializable with Logging {
     if(toRemove) {
       k = toRemove
     } else {
-      k = ((0.3528*n) / Math.pow(n, 0.39)) * 3
+      k = (((0.3528*n) / Math.pow(n, 0.39)) * 3).floor.toInt
     }
     
     print(k)
 
-    val ksvd = ComputeSVD.time {
-      readMatrix.computeSVD(k.floor.toInt, computeU = false)
+    val svd = ComputeSVD.time {
+      readMatrix.computeSVD(k, computeU = false)
     }
 
     if(!toRemove) {
       // Determine components to remove
-      toRemove = ksvd.s.size
+      toRemove = svd.s.size
       breakable {
-        val kSize = ksvd.s.size - 1
-        val S = MLibUtils.mllibVectorToDenseBreeze(ksvd.s)
+        val kSize = svd.s.size - 1
+        val S = MLibUtils.mllibVectorToDenseBreeze(svd.s)
         val componentVar = S :* S
         var componentSum: Double = 0
         if (kSize > 0) {
@@ -100,7 +100,7 @@ object Normalization extends Serializable with Logging {
         }
       }
     }
-    
+
     log.info("Removing top {} components in PCA normalization", toRemove)
 
     val V = MLibUtils.mllibMatrixToDenseBreeze(svd.V)
