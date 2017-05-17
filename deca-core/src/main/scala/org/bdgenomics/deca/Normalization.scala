@@ -61,40 +61,46 @@ object Normalization extends Serializable with Logging {
     }))
   }
 
-  def pcaNormalization(readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = PCANormalization.time {
-    // Compute top k components, where k is (currently) 0.2 * n
+  def pcaNormalization(kToRemove: Option[Int] = None, readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = PCANormalization.time {
+    var toRemove = getOrElse(kToRemove)
     val n = Math.min(readMatrix.numRows, readMatrix.numCols)
+    var k = 0
+    if(toRemove) {
+      k = toRemove
+    } else {
+      k = ((0.3528*n) / Math.pow(n, 0.39)) * 3
+    }
+    
+    print(k)
+
     val ksvd = ComputeSVD.time {
-      readMatrix.computeSVD((0.2*n).ceil.toInt, computeU = false)
-    }
-    val svd = ComputeSVD.time {
-      readMatrix.computeSVD(Math.min(readMatrix.numRows, readMatrix.numCols).toInt, computeU = false)
+      readMatrix.computeSVD(k.floor.toInt, computeU = false)
     }
 
-    print(ksvd.s)
-    print(svd.s)
+    if(!toRemove) {
+      // Determine components to remove
+      toRemove = ksvd.s.size
+      breakable {
+        val kSize = ksvd.s.size - 1
+        val S = MLibUtils.mllibVectorToDenseBreeze(ksvd.s)
+        val componentVar = S :* S
+        var componentSum: Double = 0
+        if (kSize > 0) {
+          componentSum = sum(componentVar(0 to kSize-1)) + ((n - kSize) * componentVar(kSize))
+        } else {
+          componentSum = n * componentVar(0)
+        }
 
-    // Determine components to remove
-    var toRemove = svd.s.size
-    breakable {
-      val kUsed = ksvd.s.size - 1
-      val S = MLibUtils.mllibVectorToDenseBreeze(ksvd.s)
-      val componentVar = S :* S
-      var componentSum: Double = 0
-      if (kUsed > 0) {
-        componentSum = sum(componentVar(0 to kUsed-1)) + ((n - kUsed) * componentVar(kUsed))
-      } else {
-        componentSum = n * componentVar(0)
-      }
-
-      val cutoff: Double = (componentSum / n) * pveMeanFactor
-      for (c <- 0 until kUsed) {
-        if (componentVar(c) < cutoff) {
-          toRemove = c
-          break
+        val cutoff: Double = (componentSum / n) * pveMeanFactor
+        for (c <- 0 until kSize) {
+          if (componentVar(c) < cutoff) {
+            toRemove = c
+            break
+          }
         }
       }
     }
+    
     log.info("Removing top {} components in PCA normalization", toRemove)
 
     val V = MLibUtils.mllibMatrixToDenseBreeze(svd.V)
