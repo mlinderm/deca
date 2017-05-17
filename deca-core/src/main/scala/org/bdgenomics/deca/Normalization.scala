@@ -65,6 +65,7 @@ object Normalization extends Serializable with Logging {
     val n = Math.min(readMatrix.numRows, readMatrix.numCols)
     var k = kToRemove.getOrElse((((0.3528*n) / Math.pow(n, 0.39)) * 3).floor.toInt)
     
+    print("AAAAAAAAAAAAAAAAAAAAAAAA")
     print(k)
 
     val svd = ComputeSVD.time {
