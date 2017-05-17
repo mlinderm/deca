@@ -61,7 +61,7 @@ object Normalization extends Serializable with Logging {
     }))
   }
 
-  def pcaNormalization(kToRemove: Option[Int] = None, readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = PCANormalization.time {
+  def pcaNormalization(readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7, kToRemove: Option[Int] = None): IndexedRowMatrix = PCANormalization.time {
     val n = Math.min(readMatrix.numRows, readMatrix.numCols)
     var k = kToRemove.getOrElse((((0.3528*n) / Math.pow(n, 0.39)) * 3).floor.toInt)
     
