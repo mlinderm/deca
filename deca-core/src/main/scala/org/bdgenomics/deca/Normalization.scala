@@ -64,10 +64,6 @@ object Normalization extends Serializable with Logging {
   def pcaNormalization(readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7, kToRemove: Option[Int] = None): IndexedRowMatrix = PCANormalization.time {
     val n = Math.min(readMatrix.numRows, readMatrix.numCols)
     var k = kToRemove.getOrElse(((0.3528*Math.pow(n, 0.61)) * 3).floor.toInt)
-    
-    println("AAAAAAAAAAAAAAAAAAAAAAAA")
-    println(k)
-    println(((0.3528*Math.pow(n, 0.61)) * 3).floor)
 
     val svd = ComputeSVD.time {
       readMatrix.computeSVD(k, computeU = false)
