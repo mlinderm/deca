@@ -62,24 +62,18 @@ object Normalization extends Serializable with Logging {
   }
 
   def pcaNormalization(kToRemove: Option[Int] = None, readMatrix: IndexedRowMatrix, pveMeanFactor: Double = 0.7): IndexedRowMatrix = PCANormalization.time {
-    var toRemove = getOrElse(kToRemove)
     val n = Math.min(readMatrix.numRows, readMatrix.numCols)
-    var k = 0
-    if(toRemove) {
-      k = toRemove
-    } else {
-      k = (((0.3528*n) / Math.pow(n, 0.39)) * 3).floor.toInt
-    }
+    var k = kToRemove.getOrElse((((0.3528*n) / Math.pow(n, 0.39)) * 3).floor.toInt)
     
     print(k)
 
     val svd = ComputeSVD.time {
       readMatrix.computeSVD(k, computeU = false)
     }
+    var toRemove = kToRemove.getOrElse(svd.s.size)
 
-    if(!toRemove) {
+    if(kToRemove.isEmpty) {
       // Determine components to remove
-      toRemove = svd.s.size
       breakable {
         val kSize = svd.s.size - 1
         val S = MLibUtils.mllibVectorToDenseBreeze(svd.s)
