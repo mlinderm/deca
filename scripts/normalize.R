@@ -58,8 +58,8 @@ Rd <- scale(Rd, center=T, scale=F)  # Mean center columns
 # Perform SVD decomposition (xhmm --PCA)
 decomp <- La.svd(Rd, nu=0)  # To compute V_t
 
-# vt is _PCA.PC_SD.txt
-# d is _PCA.PC.txt
+# vt is _PCA.PC.txt 
+# d is _PCA.PC_SD.txt
 # t(u) is _PCA.PC_LOADINGS.txt
 
 # Regenerate the original 

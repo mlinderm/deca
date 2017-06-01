@@ -27,9 +27,6 @@ targets2data.frame <- function(targets) {
 }
 
 trans.matrix <- function(f) {
-  # matrix(c(
-  #    f*(1-q)+ (1-f)*p, f*q + (1-f)*(1-2*p), (1-f)*p, p, 1-2*p, p, (1-f)*p, f*q+(1-f)*(1-2*p), f*(1-q)+ (1-f)*p    
-  #  ), ncol=3, byrow=T)
   mpfrArray(c(
     f*(1-q)+(1-f)*p, p, (1-f)*p, f*q + (1-f)*(1-2*p), 1-2*p, f*q+(1-f)*(1-2*p), (1-f)*p, p, f*(1-q)+(1-f)*p    
   ), prec=80, dim=c(3,3))
@@ -47,17 +44,17 @@ d[2:length(d)] <- {
 
 path <- matrix(nrow=nrow(Z), ncol=ncol(Z))
 #for (i in 1:nrow(Z)) {
-i <- 19 #19 #15
-  emit <- mpfrArray(NA,prec=80,dim = c(3,ncol(Z))) #matrix(nrow=3, ncol=ncol(Z))
+  i <- 19 #19 #15
+  emit <- mpfrArray(NA,prec=80,dim = c(3,ncol(Z)))
   emit[1,] <- dnorm(Z[i,], mean=-M, sd=1)
   emit[2,] <- dnorm(Z[i,], mean=0, sd=1)
   emit[3,] <- dnorm(Z[i,], mean=M, sd=1)
   
   
-  score <- mpfrArray(NA, prec = 80, dim = c(3,ncol(Z))) #matrix(nrow=3, ncol=ncol(Z))
+  score <- mpfrArray(NA, prec = 80, dim = c(3,ncol(Z)))
   backp <- matrix(nrow=3, ncol=ncol(Z))
-  fwd   <- mpfrArray(NA, prec = 80, dim = c(3,ncol(Z))) #matrix(nrow=3, ncol=ncol(Z))
-  bwd   <- mpfrArray(NA, prec = 80, dim = c(3,ncol(Z))) #matrix(nrow=3, ncol=ncol(Z))
+  fwd   <- mpfrArray(NA, prec = 80, dim = c(3,ncol(Z)))
+  bwd   <- mpfrArray(NA, prec = 80, dim = c(3,ncol(Z)))
   
   score[,1] <- c(p, 1- 2*p, p) * emit[,1]
   fwd[,1] <- score[,1]

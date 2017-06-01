@@ -55,6 +55,13 @@ class NormalizationSuite extends DecaFunSuite {
     assert(aboutEq(result, MLibUtils.mllibMatrixToDenseBreeze(matrixStar), thresh = 5e-16))
   }
 
+  sparkTest("produces same results with fixed k") {
+    val matrix = Deca.readXHMMMatrix(resourceUrl("DATA.filtered_centered.RD.txt").toString)
+    val normMatrix = Normalization.pcaNormalization(matrix.depth, fixedToRemove = Some(3))
+    val resultMatrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.txt").toString)
+    assert(aboutEq(MLibUtils.mllibMatrixToDenseBreeze(resultMatrix.depth), MLibUtils.mllibMatrixToDenseBreeze(normMatrix), thresh = 0.001))
+  }
+
   sparkTest("filters and centers SVD results") {
     val matrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.txt").toString)
     val resultMatrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)

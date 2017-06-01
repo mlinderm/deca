@@ -1,6 +1,7 @@
 package org.bdgenomics.deca.cli
 
 import org.apache.spark.SparkContext
+import org.bdgenomics.deca.cli.util.IntOptionHandler
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.{ Deca, Normalization }
 import org.bdgenomics.utils.cli._
@@ -49,6 +50,12 @@ trait NormalizeArgs {
     name = "-max_target_sd_RD_star",
     usage = "Maximum target standard deviation of the read depth after normalization. Defaults to 30.")
   var maxTargetSDRDStar: Int = 30
+
+  @Args4jOption(required = false,
+    name = "-fixed_pc_toremove",
+    usage = "Fixed number of principal components to remove if defined. Defaults to undefined",
+    handler = classOf[IntOptionHandler])
+  var fixedPCToRemove: Option[Int] = None
 }
 
 class NormalizerArgs extends Args4jBase with NormalizeArgs {
@@ -80,7 +87,8 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
       minSampleMeanRD = args.minSampleMeanRD,
       maxSampleMeanRD = args.maxSampleMeanRD,
       maxSampleSDRD = args.maxSampleSDRD,
-      maxTargetSDRDStar = args.maxTargetSDRDStar)
+      maxTargetSDRDStar = args.maxTargetSDRDStar,
+      fixedToRemove = args.fixedPCToRemove)
 
     Deca.writeXHMMMatrix(ReadDepthMatrix(zMatrix, matrix.samples, zTargets), args.outputPath, label = "Matrix")
 
