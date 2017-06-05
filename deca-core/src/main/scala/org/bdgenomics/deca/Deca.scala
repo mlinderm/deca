@@ -24,7 +24,7 @@ import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.{ DenseVector => SDV }
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
-import org.bdgenomics.deca.util.FileMerger
+import org.bdgenomics.deca.util.{ FileMerger, Target }
 import org.bdgenomics.deca.Timers._
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.utils.misc.Logging
@@ -39,10 +39,7 @@ object Deca extends Serializable with Logging {
     lines.cache()
 
     // Read header line with the targets into ReferenceRegions
-    val targets = lines.first().split('\t').drop(1).map(target => {
-      val fields = target.split(Array(':', '-'))
-      new ReferenceRegion(fields(0), fields(1).toLong - 1, fields(2).toLong)
-    })
+    val targets = lines.first().split('\t').drop(1).map(Target.regionToReferenceRegion(_))
 
     // Filter matrix based on target characteristics (including suppression list)
     val targetsToExcludeSet = targetsToExclude.toSet
@@ -79,9 +76,9 @@ object Deca extends Serializable with Logging {
   def writeXHMMMatrix(matrix: ReadDepthMatrix, filePath: String, label: String = "Matrix", format: String = "%.8f") = WriteXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
 
+    val broadcastSamples = sc.broadcast(matrix.samples)
     val lines = matrix.depth.rows.map(row => {
-      // TODO: Broadcast samples (or otherwise implement join)?
-      val sample: String = matrix.samples(row.index.toInt)
+      val sample: String = broadcastSamples.value(row.index.toInt)
       val valuesAsArray = row.vector match {
         case dense: org.apache.spark.mllib.linalg.DenseVector => dense.values
         case _ => row.vector.toArray

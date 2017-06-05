@@ -1,8 +1,10 @@
 package org.bdgenomics.deca.cli
 
 import org.apache.spark.SparkContext
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.deca.cli.util.IntOptionHandler
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
+import org.bdgenomics.deca.util.Target
 import org.bdgenomics.deca.{ Deca, Normalization }
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Argument, Option => Args4jOption }
@@ -21,6 +23,21 @@ object Normalizer extends BDGCommandCompanion {
 }
 
 trait NormalizeArgs {
+  @Args4jOption(required = false,
+    name = "-exclude_targets",
+    usage = "Path to file of targets (chr:start-end) to be excluded from analysis")
+  var excludeTargetsPath: String = null
+
+  @Args4jOption(required = false,
+    name = "-min_target_length",
+    usage = "Minimum target length. Defaults to 10.")
+  var minTargetLength: Long = 10L
+
+  @Args4jOption(required = false,
+    name = "-max_target_length",
+    usage = "Maximum target length. Defaults to 10000.")
+  var maxTargetLength: Long = 10000L
+
   @Args4jOption(required = false,
     name = "-min_target_mean_RD",
     usage = "Minimum target mean read depth prior to normalization. Defaults to 10.")
@@ -76,11 +93,18 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
 
   def run(sc: SparkContext): Unit = {
 
-    // TODO: Read in excluded targets
-    // TODO: Add in full complement of command line arguments
-    var matrix = Deca.readXHMMMatrix(args.inputPath, minTargetLength = 10L, maxTargetLength = 10000L)
+    val excludedTargets: Array[ReferenceRegion] = if (args.excludeTargetsPath != null) {
+      sc.textFile(args.excludeTargetsPath).map(Target.regionToReferenceRegion(_)).collect()
+    } else {
+      Array()
+    }
 
-    val (zMatrix, zTargets) = Normalization.normalizeReadDepth(
+    val matrix = Deca.readXHMMMatrix(args.inputPath,
+      targetsToExclude = excludedTargets,
+      minTargetLength = args.minTargetLength,
+      maxTargetLength = args.maxTargetLength)
+
+    val (zRowMatrix, zTargets) = Normalization.normalizeReadDepth(
       matrix.depth, matrix.targets,
       minTargetMeanRD = args.minTargetMeanRD,
       maxTargetMeanRD = args.maxTargetMeanRD,
@@ -89,8 +113,9 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
       maxSampleSDRD = args.maxSampleSDRD,
       maxTargetSDRDStar = args.maxTargetSDRDStar,
       fixedToRemove = args.fixedPCToRemove)
+    val zMatrix = ReadDepthMatrix(zRowMatrix, matrix.samples, zTargets)
 
-    Deca.writeXHMMMatrix(ReadDepthMatrix(zMatrix, matrix.samples, zTargets), args.outputPath, label = "Matrix")
+    Deca.writeXHMMMatrix(zMatrix, args.outputPath, label = "Matrix")
 
   }
 }
