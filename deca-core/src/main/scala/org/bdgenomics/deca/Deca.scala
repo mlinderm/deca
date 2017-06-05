@@ -87,8 +87,8 @@ object Deca extends Serializable with Logging {
       valuesAsArray.map(format.format(_)).mkString(start = sample + "\t", sep = "\t", end = "")
     })
 
-    val headPath = new Path("%s_head".format(filePath))
-    val bodyPath = "%s_body".format(filePath)
+    val headPath = new Path(s"${filePath}_head")
+    val bodyPath = s"${filePath}_body"
 
     val conf = lines.context.hadoopConfiguration
     val fs = headPath.getFileSystem(conf)
@@ -100,7 +100,7 @@ object Deca extends Serializable with Logging {
         headerWriter.write(label)
         matrix.targets.foreach(target => {
           headerWriter.write('\t')
-          headerWriter.write("%s:%d-%d".format(target.referenceName, target.start + 1, target.end))
+          headerWriter.write(s"${target.referenceName}:${target.start + 1}-${target.end}")
         })
         headerWriter.write('\n')
       } finally {
