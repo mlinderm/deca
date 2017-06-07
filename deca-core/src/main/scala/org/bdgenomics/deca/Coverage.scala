@@ -44,7 +44,7 @@ object Coverage extends Serializable with Logging {
           }
           readStart += cigar.getLength
         }
-        case (true, false) if (op.isIndel) => readStart += cigar.getLength; // Need distinguish between soft clip and insertion
+        case (true, false) if (op.isIndel) => readStart += cigar.getLength; // Need to distinguish between soft clip and insertion
         case (_, _)                        => ;
       }
     })

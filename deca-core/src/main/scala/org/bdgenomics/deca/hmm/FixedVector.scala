@@ -49,5 +49,7 @@ object FixedVector {
     new FixedVector(v0, v1, v2)
   }
 
+  val ZEROS = FixedVector(0.0, 0.0, 0.0)
   val ONES = FixedVector(1.0, 1.0, 1.0)
+
 }

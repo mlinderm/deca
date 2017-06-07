@@ -83,8 +83,8 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     prob / totalLikelihood
   }
 
-  def exclude_probability(t1: Int, t2: Int, exclude: Int, bwd: FixedVector) = {
-    var fwd = fwdCache(t1 - 1)
+  def exclude_probability(t1: Int, t2: Int, exclude: Int, bwd: FixedVector): BigDecimal = {
+    var fwd: FixedVector = if (t1 > 0) fwdCache(t1 - 1) else FixedVector.ZEROS
     for (t <- t1 to t2) {
       val trans = transProb.matrix(t)
       fwd = (fwd * trans) :* emitDistExclude(t, exclude)
@@ -102,7 +102,10 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
   }
 
   def start_probability(t1: Int, kind: Int, bwd: FixedVector): BigDecimal = {
-    fwdCache(t1 - 1)(1) * transProb.edge(t1, 1, kind) * emitDist(t1, kind) * bwd(kind) / totalLikelihood
+    if (t1 > 0)
+      fwdCache(t1 - 1)(1) * transProb.edge(t1, 1, kind) * emitDist(t1, kind) * bwd(kind) / totalLikelihood
+    else
+      0.0
   }
 
   def discoverCNVs(minSomeQuality: Double, qualFormat: String = "%.0f"): Seq[Feature] = {
@@ -125,9 +128,9 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
       if (kind != 1 && currentCNV == null) {
         // Start of a new CNV
         currentCNV = (t, kind, bwd, Phred.phred(stop_probability(t, kind, prevBwd)))
-      } else if (currentCNV != null && kind != currentCNV._2) {
+      } else if (currentCNV != null && (kind != currentCNV._2 || t == 0)) {
         // End of a CNV and possibly the start of another
-        val cnvStart = t + 1
+        val cnvStart = if (t > 0 || kind == 1) t + 1 else 0 // If we reach target 0 in a CNV
         val (cnvEnd, cnvKind, cnvBwd, stopPhredPr) = currentCNV
 
         // Compute the various probabilities for the CNV
@@ -166,7 +169,10 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
 }
 
 object SampleModel {
-  def apply(obs: SV, transProb: TransitionProbabilities, M: Double, p: Double): SampleModel = {
-    new SampleModel(MLibUtils.mllibVectorToDenseBreeze(obs), transProb, M, p)
+  def apply(obs: SV, transProb: TransitionProbabilities, M: Double, p: Double, maxObs: Double = 10.0): SampleModel = {
+    // "Clamp" observations
+    new SampleModel(MLibUtils.mllibVectorToDenseBreeze(obs).map(v => {
+      if (math.abs(v) > maxObs) math.signum(v) * maxObs else v
+    }), transProb, M, p)
   }
 }

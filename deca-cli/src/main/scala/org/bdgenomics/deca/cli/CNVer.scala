@@ -80,10 +80,14 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
     }
 
     // 3. Normalize read depth
-    val (zRowMatrix, zTargets) = Normalization.normalizeReadDepth(rdMatrix.depth, rdMatrix.targets,
-      minTargetMeanRD = args.minTargetMeanRD, maxTargetMeanRD = args.maxTargetMeanRD,
-      minSampleMeanRD = args.minSampleMeanRD, maxSampleMeanRD = args.maxSampleMeanRD,
-      maxSampleSDRD = args.maxSampleSDRD, maxTargetSDRDStar = args.maxTargetSDRDStar)
+    val (zRowMatrix, zTargets) = Normalization.normalizeReadDepth(
+      rdMatrix,
+      minTargetMeanRD = args.minTargetMeanRD,
+      maxTargetMeanRD = args.maxTargetMeanRD,
+      minSampleMeanRD = args.minSampleMeanRD,
+      maxSampleMeanRD = args.maxSampleMeanRD,
+      maxSampleSDRD = args.maxSampleSDRD,
+      maxTargetSDRDStar = args.maxTargetSDRDStar)
     val zMatrix = ReadDepthMatrix(zRowMatrix, rdMatrix.samples, zTargets)
     if (args.zScorePath != null) {
       Deca.writeXHMMMatrix(zMatrix, args.zScorePath, label = "Matrix")

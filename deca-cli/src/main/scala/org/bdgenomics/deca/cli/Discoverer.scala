@@ -39,7 +39,7 @@ trait DiscoveryArgs {
   var D: Double = 70000
 
   @Args4jOption(required = false,
-    name = "-mean_some_quality",
+    name = "-min_some_quality",
     usage = "Min Q_SOME to discover a CNV. Defaults to 30.0.")
   var minSomeQuality: Double = 30.0
 }

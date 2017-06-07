@@ -2,7 +2,7 @@ package org.bdgenomics.deca.cli
 
 import org.apache.spark.SparkContext
 import org.bdgenomics.adam.models.ReferenceRegion
-import org.bdgenomics.deca.cli.util.IntOptionHandler
+import org.bdgenomics.deca.cli.util.{ IntOptionHandler, StringOptionHandler }
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.util.Target
 import org.bdgenomics.deca.{ Deca, Normalization }
@@ -25,8 +25,9 @@ object Normalizer extends BDGCommandCompanion {
 trait NormalizeArgs {
   @Args4jOption(required = false,
     name = "-exclude_targets",
-    usage = "Path to file of targets (chr:start-end) to be excluded from analysis")
-  var excludeTargetsPath: String = null
+    usage = "Path to file of targets (chr:start-end) to be excluded from analysis",
+    handler = classOf[StringOptionHandler])
+  var excludeTargetsPath: Option[String] = null
 
   @Args4jOption(required = false,
     name = "-min_target_length",
@@ -41,32 +42,32 @@ trait NormalizeArgs {
   @Args4jOption(required = false,
     name = "-min_target_mean_RD",
     usage = "Minimum target mean read depth prior to normalization. Defaults to 10.")
-  var minTargetMeanRD: Int = 10
+  var minTargetMeanRD: Double = 10
 
   @Args4jOption(required = false,
     name = "-max_target_mean_RD",
     usage = "Maximum target mean read depth prior to normalization. Defaults to 500.")
-  var maxTargetMeanRD: Int = 500
+  var maxTargetMeanRD: Double = 500
 
   @Args4jOption(required = false,
     name = "-min_sample_mean_RD",
     usage = "Minimum sample mean read depth prior to normalization. Defaults to 25.")
-  var minSampleMeanRD: Int = 25
+  var minSampleMeanRD: Double = 25
 
   @Args4jOption(required = false,
     name = "-max_sample_mean_RD",
     usage = "Maximum sample mean read depth prior to normalization. Defaults to 200.")
-  var maxSampleMeanRD: Int = 200
+  var maxSampleMeanRD: Double = 200
 
   @Args4jOption(required = false,
     name = "-max_sample_sd_RD",
     usage = "Maximum sample standard deviation of the read depth prior to normalization. Defaults to 150.")
-  var maxSampleSDRD: Int = 150
+  var maxSampleSDRD: Double = 150
 
   @Args4jOption(required = false,
     name = "-max_target_sd_RD_star",
     usage = "Maximum target standard deviation of the read depth after normalization. Defaults to 30.")
-  var maxTargetSDRDStar: Int = 30
+  var maxTargetSDRDStar: Double = 30
 
   @Args4jOption(required = false,
     name = "-fixed_pc_toremove",
@@ -92,20 +93,13 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
   val companion = Normalizer
 
   def run(sc: SparkContext): Unit = {
-
-    val excludedTargets: Array[ReferenceRegion] = if (args.excludeTargetsPath != null) {
-      sc.textFile(args.excludeTargetsPath).map(Target.regionToReferenceRegion(_)).collect()
-    } else {
-      Array()
-    }
-
     val matrix = Deca.readXHMMMatrix(args.inputPath,
-      targetsToExclude = excludedTargets,
+      targetsToExclude = args.excludeTargetsPath,
       minTargetLength = args.minTargetLength,
       maxTargetLength = args.maxTargetLength)
 
     val (zRowMatrix, zTargets) = Normalization.normalizeReadDepth(
-      matrix.depth, matrix.targets,
+      matrix,
       minTargetMeanRD = args.minTargetMeanRD,
       maxTargetMeanRD = args.maxTargetMeanRD,
       minSampleMeanRD = args.minSampleMeanRD,

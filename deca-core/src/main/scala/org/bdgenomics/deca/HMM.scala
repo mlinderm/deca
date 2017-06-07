@@ -6,7 +6,8 @@ import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.deca.Timers._
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.hmm.{ SampleModel, TransitionProbabilities }
-import org.bdgenomics.formats.avro.Feature
+import org.bdgenomics.deca.util.MLibUtils
+import org.bdgenomics.formats.avro.{ Feature, Strand }
 import org.bdgenomics.utils.misc.Logging
 
 /**
@@ -46,6 +47,7 @@ object HMM extends Serializable with Logging {
         builder.setContigName(start_target.referenceName)
         builder.setStart(start_target.start)
         builder.setEnd(end_target.end)
+        builder.setStrand(Strand.INDEPENDENT)
 
         // Transform START_TARGET and END_TARGET to be 1-indexed
         attr.put("START_TARGET", (start_index + 1).toString)

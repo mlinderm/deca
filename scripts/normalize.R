@@ -56,7 +56,7 @@ Rd <- Rd[samples_to_keep,]
 Rd <- scale(Rd, center=T, scale=F)  # Mean center columns
 
 # Perform SVD decomposition (xhmm --PCA)
-decomp <- La.svd(Rd, nu=0)  # To compute V_t
+decomp <- svd(Rd, nu=0)  # To compute V_t
 
 # vt is _PCA.PC.txt 
 # d is _PCA.PC_SD.txt
@@ -72,14 +72,14 @@ scaled_mean_var <- mean(pc_var) * PVE_mean_factor
 to_remove <- pc_var >= scaled_mean_var
 
 # Should remove first 3 components
-C <- decomp$vt[to_remove,]
+C <- decomp$v[,to_remove,drop=F]
 
 Rd_star <- Rd
 for (r in 1:nrow(Rd)) {
   # Row centric implementation
-  for (pc in 1:nrow(C)) {
-    loading <- C[pc,] %*% Rd[r,]   # dot-product
-    Rd_star[r,] = Rd_star[r,] - (loading * C[pc,])
+  for (pc in 1:ncol(C)) {
+    loading <- C[,pc] %*% Rd[r,]   # dot-product
+    Rd_star[r,] = Rd_star[r,] - (loading * C[,pc])
   }
 }
 

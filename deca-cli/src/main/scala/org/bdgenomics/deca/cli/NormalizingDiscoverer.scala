@@ -38,16 +38,13 @@ class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) exten
   val companion = NormalizingDiscoverer
 
   def run(sc: SparkContext): Unit = {
-
-    val excludedTargets: Array[ReferenceRegion] = if (args.excludeTargetsPath != null) {
-      sc.textFile(args.excludeTargetsPath).map(Target.regionToReferenceRegion(_)).collect()
-    } else {
-      Array()
-    }
-    val matrix = Deca.readXHMMMatrix(args.inputPath, targetsToExclude = excludedTargets, minTargetLength = args.minTargetLength, maxTargetLength = args.maxTargetLength)
+    val matrix = Deca.readXHMMMatrix(args.inputPath,
+      targetsToExclude = args.excludeTargetsPath,
+      minTargetLength = args.minTargetLength,
+      maxTargetLength = args.maxTargetLength)
 
     val (zRowMatrix, zTargets) = Normalization.normalizeReadDepth(
-      matrix.depth, matrix.targets,
+      matrix,
       minTargetMeanRD = args.minTargetMeanRD,
       maxTargetMeanRD = args.maxTargetMeanRD,
       minSampleMeanRD = args.minSampleMeanRD,

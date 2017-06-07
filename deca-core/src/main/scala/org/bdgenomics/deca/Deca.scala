@@ -32,7 +32,7 @@ import org.bdgenomics.utils.misc.Logging
 object Deca extends Serializable with Logging {
 
   def readXHMMMatrix(filePath: String,
-                     targetsToExclude: Array[ReferenceRegion] = Array(),
+                     targetsToExclude: Option[String] = None,
                      minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue): ReadDepthMatrix = ReadXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
     val lines = sc.textFile(filePath)
@@ -42,14 +42,16 @@ object Deca extends Serializable with Logging {
     val targets = lines.first().split('\t').drop(1).map(Target.regionToReferenceRegion(_))
 
     // Filter matrix based on target characteristics (including suppression list)
-    val targetsToExcludeSet = targetsToExclude.toSet
-    val toKeep = DenseVector.tabulate(targets.length) { (index) =>
-      {
-        val target = targets(index)
-        val length = target.length
-        (length >= minTargetLength) && (length <= maxTargetLength) && !targetsToExcludeSet.contains(target)
-      }
-    }
+    val targetsToExcludeSet = (targetsToExclude match {
+      case Some(excludeFile) => sc.textFile(excludeFile).map(Target.regionToReferenceRegion(_)).toLocalIterator
+      case None              => Iterator.empty
+    }).toSet
+
+    val toKeep = DenseVector.tabulate(targets.length)((index) => {
+      val target = targets(index)
+      val length = target.length
+      (length >= minTargetLength) && (length <= maxTargetLength) && !targetsToExcludeSet.contains(target)
+    })
 
     // Return sample IDs as array
     val samples = lines.map(line => {

@@ -3,7 +3,7 @@
  */
 package org.bdgenomics.deca
 
-import breeze.linalg.{ DenseMatrix, DenseVector, max }
+import breeze.linalg.{ DenseMatrix, DenseVector, max, sum }
 import breeze.numerics.abs
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
@@ -77,12 +77,11 @@ class NormalizationSuite extends DecaFunSuite {
     // 22:19770437-19770545
     // And also filter out targets with length < 10 and > 10000
     val matrix = Deca.readXHMMMatrix(resourceUrl("DATA.RD.txt").toString,
-      Array(ReferenceRegion("22", 19770436L, 19770545L)),
-      minTargetLength = 10L, maxTargetLength = 10000L)
+      Some(resourceUrl("exclude_targets.txt").toString), minTargetLength = 10L, maxTargetLength = 10000L)
 
     val resultMatrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
 
-    val (zMatrix, zTargets) = Normalization.normalizeReadDepth(matrix.depth, matrix.targets)
+    val (zMatrix, zTargets) = Normalization.normalizeReadDepth(matrix)
 
     // Max observed difference was 1.02e-4 between XHMM results and this implementation
     assert(aboutEq(

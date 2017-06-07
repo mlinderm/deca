@@ -12,7 +12,7 @@ case class ReadDepthMatrix(depth: IndexedRowMatrix, samples: Array[String], targ
     depth.numRows() == samples.length && depth.numCols() == targets.length,
     "Size of depth matrix not consistent with samples and targets")
 
-  def numSamples() = samples.length
+  def numSamples() = depth.numRows()
 
   def numTargets() = targets.length
 }
