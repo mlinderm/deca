@@ -1,10 +1,8 @@
 package org.bdgenomics.deca.cli
 
 import org.apache.spark.SparkContext
-import org.bdgenomics.adam.models.ReferenceRegion
-import org.bdgenomics.deca.cli.util.{ IntOptionHandler, StringOptionHandler }
+import org.bdgenomics.deca.cli.util.{ IntOptionHandler => IntOptionArg, StringOptionHandler => StringOptionArg }
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
-import org.bdgenomics.deca.util.Target
 import org.bdgenomics.deca.{ Deca, Normalization }
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Argument, Option => Args4jOption }
@@ -26,7 +24,7 @@ trait NormalizeArgs {
   @Args4jOption(required = false,
     name = "-exclude_targets",
     usage = "Path to file of targets (chr:start-end) to be excluded from analysis",
-    handler = classOf[StringOptionHandler])
+    handler = classOf[StringOptionArg])
   var excludeTargetsPath: Option[String] = null
 
   @Args4jOption(required = false,
@@ -72,7 +70,7 @@ trait NormalizeArgs {
   @Args4jOption(required = false,
     name = "-fixed_pc_toremove",
     usage = "Fixed number of principal components to remove if defined. Defaults to undefined",
-    handler = classOf[IntOptionHandler])
+    handler = classOf[IntOptionArg])
   var fixedPCToRemove: Option[Int] = None
 }
 

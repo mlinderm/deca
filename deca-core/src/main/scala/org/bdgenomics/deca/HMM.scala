@@ -15,7 +15,10 @@ import org.bdgenomics.utils.misc.Logging
  */
 object HMM extends Serializable with Logging {
 
-  def discoverCNVs(readMatrix: ReadDepthMatrix, M: Double = 3, T: Double = 6, p: Double = 1e-8, D: Double = 70000, minSomeQuality: Double = 30.0): FeatureRDD = DiscoverCNVs.time {
+  def discoverCNVs(readMatrix: ReadDepthMatrix,
+                   M: Double = 3, T: Double = 6, p: Double = 1e-8, D: Double = 70000,
+                   minSomeQuality: Double = 30.0): FeatureRDD = DiscoverCNVs.time {
+
     val sc = SparkContext.getOrCreate()
 
     // Generate transition probabilities from targets
@@ -23,7 +26,7 @@ object HMM extends Serializable with Logging {
 
     // Broadcast samples and targets so that features can be fixed up
     val targets = sc.broadcast(readMatrix.targets)
-    val samples = sc.broadcast(readMatrix.samples) // Should this really be a join?
+    val samples = sc.broadcast(readMatrix.samples)
 
     val cnvs = readMatrix.depth.rows.flatMap(obs => {
       // Create per-sample HMM model
@@ -31,6 +34,8 @@ object HMM extends Serializable with Logging {
 
       // Discover CNVs
       val per_sample_cnvs = model.discoverCNVs(minSomeQuality)
+
+      // Refine feature descriptions with coordinates, sample, etc.
       per_sample_cnvs.map(raw_feature => {
         val attr = raw_feature.getAttributes
 

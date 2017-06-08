@@ -44,8 +44,7 @@ object Normalization extends Serializable with Logging {
     new IndexedRowMatrix(matrix.rows.map(row => {
       IndexedRow(
         row.index,
-        MLibUtils.breezeVectorToMLlib(
-          MLibUtils.mllibVectorToDenseBreeze(row.vector) - MLibUtils.mllibVectorToDenseBreeze(colStats.mean)))
+        MLibUtils.breezeVectorToMLlib(MLibUtils.mllibVectorToDenseBreeze(row.vector) - MLibUtils.mllibVectorToDenseBreeze(colStats.mean)))
     }))
   }
 
@@ -106,7 +105,8 @@ object Normalization extends Serializable with Logging {
         val componentVar = S :* S
 
         // Compute cutoff by extending last value of S to entire length if max components had been calculated
-        val cutoff: Double = pveMeanFactor * ((sum(componentVar) + (maxComponents - componentVar.length) * componentVar(-1)) / maxComponents)
+        val cutoff: Double = pveMeanFactor *
+          ((sum(componentVar) + (maxComponents - componentVar.length) * componentVar(-1)) / maxComponents)
         for (c <- 0 until componentVar.length) {
           if (componentVar(c) < cutoff) {
             toRemove = c

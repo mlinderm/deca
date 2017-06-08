@@ -1,10 +1,8 @@
 package org.bdgenomics.deca.cli
 
 import org.apache.spark.SparkContext
-import org.bdgenomics.adam.models.ReferenceRegion
-import org.bdgenomics.deca.cli.util.IntOptionHandler
+import org.bdgenomics.deca.cli.util.{ IntOptionHandler => IntOptionArg, StringOptionHandler => StringOptionArg }
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
-import org.bdgenomics.deca.util.Target
 import org.bdgenomics.deca.{ Deca, HMM, Normalization }
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Argument, Option => Args4jOption }
@@ -32,6 +30,12 @@ class NormalizingDiscovererArgs extends Args4jBase with NormalizeArgs with Disco
     name = "-o",
     usage = "Path to write discovered CNVs as GFF3 file")
   var outputPath: String = null
+
+  @Args4jOption(required = false,
+    name = "-save_zscores",
+    usage = "Path to write XHMM normalized, filtered, Z score matrix",
+    handler = classOf[StringOptionArg])
+  var zScorePath: Option[String] = None
 }
 
 class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) extends BDGSparkCommand[NormalizingDiscovererArgs] {
@@ -52,9 +56,18 @@ class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) exten
       maxSampleSDRD = args.maxSampleSDRD,
       maxTargetSDRDStar = args.maxTargetSDRDStar,
       fixedToRemove = args.fixedPCToRemove)
-    val zMatrix = ReadDepthMatrix(zRowMatrix, matrix.samples, zTargets)
 
-    var features = HMM.discoverCNVs(zMatrix, M = args.M, T = args.T, p = args.p, D = args.D, minSomeQuality = args.minSomeQuality)
+    matrix.unpersist()
+
+    val zMatrix = ReadDepthMatrix(zRowMatrix, matrix.samples, zTargets)
+    args.zScorePath.foreach(path => {
+      zMatrix.cache()
+      Deca.writeXHMMMatrix(zMatrix, path, label = "Matrix")
+    })
+
+    var features = HMM.discoverCNVs(zMatrix,
+      M = args.M, T = args.T, p = args.p, D = args.D,
+      minSomeQuality = args.minSomeQuality)
     features.saveAsGff3(args.outputPath, asSingleFile = true)
   }
 }

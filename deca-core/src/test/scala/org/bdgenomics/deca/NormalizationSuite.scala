@@ -59,7 +59,10 @@ class NormalizationSuite extends DecaFunSuite {
     val matrix = Deca.readXHMMMatrix(resourceUrl("DATA.filtered_centered.RD.txt").toString)
     val normMatrix = Normalization.pcaNormalization(matrix.depth, fixedToRemove = Some(3))
     val resultMatrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.txt").toString)
-    assert(aboutEq(MLibUtils.mllibMatrixToDenseBreeze(resultMatrix.depth), MLibUtils.mllibMatrixToDenseBreeze(normMatrix), thresh = 0.001))
+    assert(aboutEq(
+      MLibUtils.mllibMatrixToDenseBreeze(resultMatrix.depth),
+      MLibUtils.mllibMatrixToDenseBreeze(normMatrix),
+      thresh = 0.001))
   }
 
   sparkTest("filters and centers SVD results") {
@@ -76,8 +79,10 @@ class NormalizationSuite extends DecaFunSuite {
     // To match XHMM need to filter out low complexity and extreme GC targets. For the example data, this is just
     // 22:19770437-19770545
     // And also filter out targets with length < 10 and > 10000
-    val matrix = Deca.readXHMMMatrix(resourceUrl("DATA.RD.txt").toString,
-      Some(resourceUrl("exclude_targets.txt").toString), minTargetLength = 10L, maxTargetLength = 10000L)
+    val matrix = Deca.readXHMMMatrix(
+      resourceUrl("DATA.RD.txt").toString,
+      Some(resourceUrl("exclude_targets.txt").toString),
+      minTargetLength = 10L, maxTargetLength = 10000L)
 
     val resultMatrix = Deca.readXHMMMatrix(resourceUrl("DATA.PCA_normalized.filtered.sample_zscores.RD.txt").toString)
 
@@ -85,7 +90,9 @@ class NormalizationSuite extends DecaFunSuite {
 
     // Max observed difference was 1.02e-4 between XHMM results and this implementation
     assert(aboutEq(
-      MLibUtils.mllibMatrixToDenseBreeze(resultMatrix.depth), MLibUtils.mllibMatrixToDenseBreeze(zMatrix), thresh = 2e-4))
+      MLibUtils.mllibMatrixToDenseBreeze(resultMatrix.depth),
+      MLibUtils.mllibMatrixToDenseBreeze(zMatrix),
+      thresh = 2e-4))
     assert(zTargets.sameElements(resultMatrix.targets))
   }
 }

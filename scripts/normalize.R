@@ -1,6 +1,9 @@
 # R test implementation for exploring normalization components of XHMM algorithm
 # Implements steps in http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml (using demo data)
 
+PVE_mean_factor <- 0.7
+XHMM_RUN_DIR <- "../deca-core/src/test/resources"
+
 read.xhmm <- function(filename) {
   # Convenience function to read XHMM table outputs
   d <- as.matrix(read.table(filename, header=T, row.names=1))
@@ -20,9 +23,7 @@ targets2data.frame <- function(targets) {
   )
 }
 
-PVE_mean_factor <- 0.7
-
-Rd <- read.xhmm("RUN/DATA.RD.txt")
+Rd <- read.xhmm(file.path(XHMM_RUN_DIR,"DATA.RD.txt"))
 targets <- targets2data.frame(colnames(Rd))
 
 # Filter I: Filter extreme targets and samples, then mean center the data
@@ -32,11 +33,10 @@ targets <- targets2data.frame(colnames(Rd))
 #--minMeanSampleRD 25 --maxMeanSampleRD 200 \
 #--maxSdSampleRD 150
 
-low_complexity <- read.table("RUN/low_complexity_targets.txt", header=F, stringsAsFactors=F, col.names="target")
-extreme_gc     <- read.table("RUN/extreme_gc_targets.txt", header=F, stringsAsFactors=F, col.names="target")
+exclude_targets <- read.table(file.path(XHMM_RUN_DIR,"exclude_targets.txt"), header=F, stringsAsFactors=F, col.names="target")
 
 # XHMM filterTargetProperties function
-targets_to_keep <- !(colnames(Rd) %in% union(low_complexity$target, extreme_gc$target))
+targets_to_keep <- !(colnames(Rd) %in% exclude_targets$targets)
 targets_to_keep <- targets_to_keep & {
   target_means <- colMeans(Rd)
   target_lengths <- targets$end - targets$beg + 1

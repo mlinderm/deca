@@ -1,6 +1,9 @@
+# R test implementation for discovery components of XHMM algorithm
+# Implements steps in http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml (using demo data)
+
 library(Rmpfr)
 
-XHMM_RUN_DIR <- "RUN"
+XHMM_RUN_DIR <- "../deca-core/src/test/resources"
 
 D <- 70000
 p <- 1e-8
