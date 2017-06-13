@@ -48,4 +48,34 @@ class CoverageSuite extends DecaFunSuite {
     assert(abs(matrix(0, 1) - 58.86) < 0.005) // There are reads overlapping next target
     assert(matrix(0, 2) === 0.0)
   }
+
+  sparkTest("counts fragments not just reads") {
+    val inputBam = resourceUrl("HG00146_target51.bam")
+    val reads = sc.loadAlignments(inputBam.toString)
+
+    val inputTargets = resourceUrl("EXOME.interval_list")
+    val features = sc.loadFeatures(inputTargets.toString)
+
+    val depths = Coverage.coverageMatrix(Seq(reads), features, minMapQ = 20)
+    assert(depths.numSamples() === 1 && depths.numTargets() === 300)
+
+    val matrix = MLibUtils.mllibMatrixToDenseBreeze(depths.depth)
+
+    assert(abs(matrix(0, 50) - 407.32) < 0.005) // Should be target 22:17662374-17662466
+  }
+
+  sparkTest("counts imperfectly paired fragments") {
+    val inputBam = resourceUrl("HG00116_column.bam")
+    val reads = sc.loadAlignments(inputBam.toString)
+
+    val inputTargets = resourceUrl("HG00116_column.interval_list")
+    val features = sc.loadFeatures(inputTargets.toString)
+
+    val depths = Coverage.coverageMatrix(Seq(reads), features, minMapQ = 20)
+    assert(depths.numSamples() === 1 && depths.numTargets() === 1)
+
+    val matrix = MLibUtils.mllibMatrixToDenseBreeze(depths.depth)
+
+    assert(abs(matrix(0, 0) - 343) < 1e-8) // Should be target 22:19398239
+  }
 }

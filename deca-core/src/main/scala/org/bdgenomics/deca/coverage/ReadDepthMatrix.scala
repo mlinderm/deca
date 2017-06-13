@@ -16,6 +16,7 @@ case class ReadDepthMatrix(depth: IndexedRowMatrix, samples: Array[String], targ
 
   def unpersist() = depth.rows.unpersist()
 
+  // We can't use the IndexedRowMatrix numRows() method as it returns the maximum index
   def numSamples() = depth.rows.count()
 
   def numTargets() = targets.length

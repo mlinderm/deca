@@ -55,8 +55,10 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
   def run(sc: SparkContext): Unit = {
 
     val readProj = {
-      // TODO: Add mate fields when coverage incorporates fragment features
-      var readFields = Seq(ARF.readMapped, ARF.mapq, ARF.contigName, ARF.start, ARF.end, ARF.cigar)
+      var readFields = Seq(
+        ARF.readMapped, ARF.mapq, ARF.duplicateRead, ARF.failedVendorQualityChecks, ARF.primaryAlignment,
+        ARF.contigName, ARF.start, ARF.end, ARF.cigar,
+        ARF.mateMapped, ARF.mateContigName, ARF.mateAlignmentStart)
       Projection(readFields)
     }
 

@@ -6,11 +6,12 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SQLContext
-import org.bdgenomics.adam.models.ReferenceRegion
+import org.apache.spark.sql.functions.lit
+import org.bdgenomics.adam.models.{ ReferencePosition, ReferenceRegion }
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.adam.rich.RichAlignmentRecord
-import org.bdgenomics.deca.coverage.{ ReadDepthMatrix }
+import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.util.MLibUtils
 import org.bdgenomics.deca.Timers._
 import org.bdgenomics.formats.avro.AlignmentRecord
@@ -18,7 +19,7 @@ import org.bdgenomics.utils.misc.Logging
 
 import scala.annotation.tailrec
 import scala.collection.JavaConversions._
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ ArrayBuffer, HashMap, MultiMap, Set }
 import scala.math.{ max, min }
 import scala.util.control.Breaks._
 
@@ -26,7 +27,13 @@ import scala.util.control.Breaks._
  * Created by mlinderman on 3/8/17.
  */
 
-case class CoverageByTarget(targetId: Long, coverage: Double) {
+case class CoverageByTarget(targetId: Int, coverage: Double) {
+}
+
+object CoverageByTarget {
+  def apply(target: (ReferenceRegion, Int), coverage: Long): CoverageByTarget = {
+    new CoverageByTarget(targetId = target._2, coverage = coverage.toDouble / target._1.length)
+  }
 }
 
 object Coverage extends Serializable with Logging {
@@ -36,16 +43,14 @@ object Coverage extends Serializable with Logging {
     var readStart = read.getStart
     read.samtoolsCigar.foreach(cigar => {
       val op = cigar.getOperator
-      (op.consumesReadBases, op.consumesReferenceBases) match {
-        case (true, true) => {
-          val overlap = min(region.end, readStart + cigar.getLength) - max(region.start, readStart)
-          if (overlap > 0) {
-            pileup += overlap
-          }
-          readStart += cigar.getLength
+      if (op.consumesReadBases && op.consumesReferenceBases) {
+        val overlap = min(region.end, readStart + cigar.getLength) - max(region.start, readStart)
+        if (overlap > 0) {
+          pileup += overlap
         }
-        case (true, false) if (op.isIndel) => readStart += cigar.getLength; // Need to distinguish between soft clip and insertion
-        case (_, _)                        => ;
+        readStart += cigar.getLength
+      } else if (op.consumesReferenceBases) {
+        readStart += cigar.getLength; // Need to distinguish between soft clip and insertion
       }
     })
     pileup
@@ -56,6 +61,20 @@ object Coverage extends Serializable with Logging {
       query.referenceName > other.referenceName
     else
       query.start >= other.end
+  }
+
+  /**
+   * Compute maximum potential overlapping region
+   *
+   * @param read
+   * @return
+   */
+  private def couldOverlap(read: AlignmentRecord): Option[ReferenceRegion] = {
+    if (read.getMateMapped && read.getMateContigName == read.getContigName &&
+      (read.getMateAlignmentStart >= read.getStart && read.getMateAlignmentStart < read.getEnd)) {
+      Some(ReferenceRegion(read.getContigName, read.getMateAlignmentStart, read.getEnd))
+    } else
+      None
   }
 
   def findFirstTarget(targets: Array[(ReferenceRegion, Int)], query: ReferenceRegion): Option[Int] = {
@@ -80,12 +99,12 @@ object Coverage extends Serializable with Logging {
     val targetsArray = targets.value
     val coverageRdd = reads.rdd.mapPartitions(readIter => {
 
-      val coverageByTarget = ArrayBuffer[CoverageByTarget]()
       val perTargetTotalCoverage = ArrayBuffer[Long]()
+      val overlapSubtraction = new HashMap[String, Set[(Int, Long)]] with MultiMap[String, (Int, Long)]
 
       // Scan forward to identify any overlapping targets to compute depth. Return new first target for future searches
       // as we advance through the reads
-      @tailrec def scanForward(read: AlignmentRecord, readRegion: ReferenceRegion, firstIndex: Int, targetIndex: Int, localIndex: Int): Int = {
+      @tailrec def scanForward(read: AlignmentRecord, readRegion: ReferenceRegion, firstIndex: Int, targetIndex: Int, localIndex: Int, mateOverlap: Option[ReferenceRegion]): Int = {
         if (targetIndex >= targetsArray.length)
           return firstIndex
         else {
@@ -93,71 +112,96 @@ object Coverage extends Serializable with Logging {
           if (readRegion.covers(targetRegion)) {
             if (localIndex >= perTargetTotalCoverage.length)
               perTargetTotalCoverage ++= Seq.fill[Long](localIndex - perTargetTotalCoverage.length + 1)(0)
-            perTargetTotalCoverage(localIndex) += addReadToPileup(targetRegion, new RichAlignmentRecord(read))
-            return scanForward(read, readRegion, firstIndex, targetIndex + 1, localIndex + 1)
+
+            val richRead = new RichAlignmentRecord(read)
+            perTargetTotalCoverage(localIndex) += addReadToPileup(targetRegion, richRead)
+
+            // Keep track of potentially overlapping paired reads to more precisely calculate their coverage
+            mateOverlap.filter(targetRegion.overlaps(_)).foreach(potentialOverlap => {
+              val overlapAndTarget = targetRegion.intersection(potentialOverlap)
+              overlapSubtraction.addBinding(read.getReadName, (localIndex, addReadToPileup(overlapAndTarget, richRead)))
+            })
+
+            return scanForward(read, readRegion, firstIndex, targetIndex + 1, localIndex + 1, mateOverlap)
           } else if (readRegion.referenceName == targetRegion.referenceName && readRegion.start >= targetRegion.end)
-            return scanForward(read, readRegion, targetIndex + 1, targetIndex + 1, localIndex + 1)
-          else if (readRegion.referenceName == targetRegion.referenceName && targetRegion.start < readRegion.end)
-            return scanForward(read, readRegion, firstIndex, targetIndex + 1, localIndex + 1)
+            return scanForward(read, readRegion, targetIndex + 1, targetIndex + 1, localIndex + 1, mateOverlap)
           else
             return firstIndex
         }
       }
+
+      // CoverageByTarget for return
+      val coverageByTarget = ArrayBuffer[CoverageByTarget]()
 
       // Find starting target of sorted reads once per partition
       var firstRead = readIter.next()
       var firstTarget = findFirstTarget(targetsArray, ReferenceRegion.unstranded(firstRead))
       while (firstTarget.isDefined) {
         val firstTargetIndex = firstTarget.get
-        var movingFirstTargetIndex = scanForward(firstRead, ReferenceRegion.unstranded(firstRead), firstTargetIndex, firstTargetIndex, 0)
+        var movingFirstTargetIndex = scanForward(
+          firstRead, ReferenceRegion.unstranded(firstRead),
+          firstTargetIndex, firstTargetIndex, localIndex = 0,
+          couldOverlap(firstRead))
 
         breakable {
           readIter.foreach(read => {
             val readRegion = ReferenceRegion.unstranded(read)
+
+            // Crossing contig boundary? Reset firstRead and firstTarget for coverage analysis of next contig
             if (read.getContigName != firstRead.getContigName) {
-              // Switched contigs. Reset firstRead and firstTarget for coverage analysis of next contig
               firstRead = read
               firstTarget = findFirstTarget(targetsArray, readRegion)
               break // Should happen infrequently
             }
-            movingFirstTargetIndex = scanForward(read, readRegion, movingFirstTargetIndex, movingFirstTargetIndex, movingFirstTargetIndex - firstTargetIndex)
+
+            // Does this read potentially overlap its earlier mate? If so, subtract previously computed overlap region.
+            // We could (should) check if that possible overlap region would have actually fully overlapped, like we
+            // assumed. Not doing so could produce pessimistic coverage. If we implement that check, however, the
+            // maximum error decreases from 1 to 0.2, but the mean error goes up.
+            overlapSubtraction.remove(read.getReadName).foreach(overlaps => {
+              overlaps.foreach {
+                case (localIndex, coverage) => {
+                  perTargetTotalCoverage(localIndex) -= coverage //Math.min(coverage, addReadToPileup(overlapAndTarget, read))
+                }
+              }
+            })
+
+            movingFirstTargetIndex = scanForward(
+              read, readRegion,
+              movingFirstTargetIndex, movingFirstTargetIndex, localIndex = (movingFirstTargetIndex - firstTargetIndex),
+              couldOverlap(read))
           })
-          firstTarget = None // Terminate while loop
+
+          firstTarget = None // Terminate while loop since we have exhausted all reads
         }
 
+        // Translate local indices to global target indices
         coverageByTarget ++= perTargetTotalCoverage.zipWithIndex.map {
-          case (totalCoverage, index) => {
-            val target = targetsArray(firstTargetIndex + index)
-            CoverageByTarget(target._2, totalCoverage.toDouble / target._1.length)
-          }
+          case (totalCoverage, index) => CoverageByTarget(targetsArray(firstTargetIndex + index), totalCoverage)
         }
+
+        // Reset local coverage counts
         perTargetTotalCoverage.clear()
+        overlapSubtraction.clear()
       }
 
       coverageByTarget.toIterator
     })
 
-    // TODO: Return table with target and sample ID to enable different matrices to be generated
     val sqlContext = SQLContext.getOrCreate(coverageRdd.context)
     import sqlContext.implicits._
     val coverageDs = sqlContext.createDataset(coverageRdd)
 
-    val coverageByTargetDs = coverageDs.groupBy(coverageDs("targetId")).sum("coverage")
-
-    coverageByTargetDs.rdd.map(row => {
-      (row.getLong(0), row.getDouble(1))
-    })
+    coverageDs.groupBy(coverageDs("targetId")).sum("coverage")
   }
 
-  def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Long, (Long, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {
+  def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Int, (Int, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {
     // TODO: Are there additional partitioning (or reduction) optimizations that should be applied here?
     val indexedRows = coverageCoordinates.groupByKey(numSamples.toInt).map {
       case (sampleIdx, targetCovg) =>
         var perTargetCoverage = DenseVector.zeros[Double](numTargets.toInt)
-        targetCovg.foreach {
-          case (targetIdx, covg) => perTargetCoverage(targetIdx.toInt) = covg
-        }
-        IndexedRow(sampleIdx, MLibUtils.breezeVectorToMLlib(perTargetCoverage))
+        targetCovg.foreach { case (targetIdx, covg) => perTargetCoverage(targetIdx) = covg; }
+        IndexedRow(sampleIdx.toLong, MLibUtils.breezeVectorToMLlib(perTargetCoverage))
     }
     new IndexedRowMatrix(indexedRows, numSamples, numTargets.toInt)
   }
@@ -197,11 +241,19 @@ object Coverage extends Serializable with Logging {
         case (readsRdd, sampleIdx) =>
           // Basic read filtering
           val filteredReadsRdd = readsRdd.transform(rdd => rdd.filter(read => {
-            !read.getDuplicateRead && read.getReadMapped && (minMapQ == 0 || read.getMapq >= minMapQ)
+            !read.getDuplicateRead &&
+              !read.getFailedVendorQualityChecks &&
+              read.getPrimaryAlignment &&
+              read.getReadMapped &&
+              (minMapQ == 0 || read.getMapq >= minMapQ)
           }))
 
           // Label coverage with sample ID to create (sampleId, (targetId, coverage)) RDD
-          sortedCoverageCalculation(broadcastTargetArray, filteredReadsRdd).map((sampleIdx.toLong, _))
+          // Union as RDDs instead of datasets to minimize query planning
+          // https://stackoverflow.com/questions/37612622/spark-unionall-multiple-dataframes
+          sortedCoverageCalculation(broadcastTargetArray, filteredReadsRdd)
+            .withColumn("sample", lit(sampleIdx))
+            .rdd.map(row => { (row.getInt(2), (row.getInt(0), row.getDouble(1))) })
       }
 
       val sc = SparkContext.getOrCreate()
