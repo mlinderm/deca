@@ -78,4 +78,21 @@ class CoverageSuite extends DecaFunSuite {
 
     assert(abs(matrix(0, 0) - 343) < 1e-8) // Should be target 22:19398239
   }
+
+  sparkTest("incorporates CIGAR into fragment analysis") {
+    val inputBam = resourceUrl("HG00146_overlap.bam")
+    val reads = sc.loadAlignments(inputBam.toString)
+
+    val inputTargets = resourceUrl("EXOME.interval_list")
+    val features = sc.loadFeatures(inputTargets.toString)
+
+    val depths = Coverage.coverageMatrix(Seq(reads), features, minMapQ = 20)
+    assert(depths.numSamples() === 1 && depths.numTargets() === 300)
+
+    val matrix = MLibUtils.mllibMatrixToDenseBreeze(depths.depth)
+    println(matrix(0, 34), matrix(0, 35))
+    //assert(abs(matrix(0, 34) - 0.31) < 0.005) // 22:17600882-17601080
+    //assert(abs(matrix(0, 35) - 1.00) < 0.005) // 22:17601082-17601091
+
+  }
 }

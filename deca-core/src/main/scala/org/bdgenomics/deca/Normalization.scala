@@ -133,8 +133,7 @@ object Normalization extends Serializable with Logging {
       var rdStar = rd.copy
       for (col <- 0 until C.value.cols) {
         val component = C.value(::, col)
-        val loading = component dot rd
-        rdStar :-= component * loading
+        rdStar :-= component * (component dot rd)
       }
       IndexedRow(row.index, MLibUtils.breezeVectorToMLlib(rdStar))
     }))

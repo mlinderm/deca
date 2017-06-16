@@ -25,7 +25,7 @@ trait NormalizeArgs {
     name = "-exclude_targets",
     usage = "Path to file of targets (chr:start-end) to be excluded from analysis",
     handler = classOf[StringOptionArg])
-  var excludeTargetsPath: Option[String] = null
+  var excludeTargetsPath: Option[String] = None
 
   @Args4jOption(required = false,
     name = "-min_target_length",
