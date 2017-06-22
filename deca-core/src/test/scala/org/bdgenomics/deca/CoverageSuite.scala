@@ -90,9 +90,9 @@ class CoverageSuite extends DecaFunSuite {
     assert(depths.numSamples() === 1 && depths.numTargets() === 300)
 
     val matrix = MLibUtils.mllibMatrixToDenseBreeze(depths.depth)
-    println(matrix(0, 34), matrix(0, 35))
-    //assert(abs(matrix(0, 34) - 0.31) < 0.005) // 22:17600882-17601080
-    //assert(abs(matrix(0, 35) - 1.00) < 0.005) // 22:17601082-17601091
+
+    assert(abs(matrix(0, 34) - 0.31) < 0.005) // 22:17600882-17601080
+    assert(abs(matrix(0, 35) - 1.00) < 0.005) // 22:17601082-17601091
 
   }
 }
