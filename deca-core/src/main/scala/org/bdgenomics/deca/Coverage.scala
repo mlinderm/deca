@@ -5,8 +5,6 @@ import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.functions.lit
 import org.bdgenomics.adam.models.{ ReferenceRegion }
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
@@ -129,7 +127,7 @@ object Coverage extends Serializable with Logging {
     if (first < targets.length) Some(first) else None
   }
 
-  def sortedCoverageCalculation(targets: Broadcast[Array[(ReferenceRegion, Int)]], reads: AlignmentRecordRDD): RDD[CoverageByTarget] = {
+  def sortedCoverageCalculation(targets: Broadcast[Array[(ReferenceRegion, Int)]], reads: AlignmentRecordRDD): RDD[(Int, Double)] = {
     val targetsArray = targets.value
     reads.rdd.mapPartitions(readIter => {
 
@@ -192,13 +190,15 @@ object Coverage extends Serializable with Logging {
       }
 
       coverageByTarget.map {
-        case (targetIndex, totalCoverage) => CoverageByTarget(targetsArray(targetIndex), totalCoverage)
+        case (targetIndex, totalCoverage) => {
+          val target = targetsArray(targetIndex)
+          (target._2, totalCoverage.toDouble / target._1.length)
+        }
       }.toIterator
     })
   }
 
   def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Int, (Int, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {
-    // TODO: Are there additional partitioning (or reduction) optimizations that should be applied here?
     val indexedRows = coverageCoordinates.groupByKey(numSamples.toInt).map {
       case (sampleIdx, targetCovg) =>
         var perTargetCoverage = DenseVector.zeros[Double](numTargets.toInt)
@@ -226,7 +226,7 @@ object Coverage extends Serializable with Logging {
       sc.broadcast(targetsDriver.zipWithIndex.sortBy(_._1))
     }
 
-    // TODO: Check inputs, e.g. BAM files, are in sorted order
+    // TODO: Verify inputs, e.g. BAM files, are in sorted order
 
     val samplesDriver = readRdds.map(readsRdd => {
       val samples = readsRdd.recordGroups.toSamples
@@ -250,20 +250,9 @@ object Coverage extends Serializable with Logging {
               (minMapQ == 0 || read.getMapq >= minMapQ)
           }))
 
-          val coverageRdd = sortedCoverageCalculation(broadcastTargetArray, filteredReadsRdd)
-
-          val sqlContext = SQLContext.getOrCreate(coverageRdd.context)
-          import sqlContext.implicits._
-          val coverageDs = sqlContext.createDataset(coverageRdd)
-
-          // Label coverage with sample ID to create (sampleId, (targetId, coverage)) RDD
-          // Union as RDDs instead of datasets to minimize query planning
-          // https://stackoverflow.com/questions/37612622/spark-unionall-multiple-dataframes
-          coverageDs.groupBy(coverageDs("targetId")).sum("coverage")
-            .withColumn("sample", lit(sampleIdx))
-            .rdd.map(row => {
-              (row.getInt(2), (row.getInt(0), row.getDouble(1)))
-            })
+          sortedCoverageCalculation(broadcastTargetArray, filteredReadsRdd)
+            .reduceByKey(_ + _)
+            .map((sampleIdx, _))
         }
       }
 

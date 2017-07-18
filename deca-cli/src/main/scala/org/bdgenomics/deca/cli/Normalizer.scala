@@ -69,9 +69,14 @@ trait NormalizeArgs {
 
   @Args4jOption(required = false,
     name = "-fixed_pc_toremove",
-    usage = "Fixed number of principal components to remove if defined. Defaults to undefined",
+    usage = "Fixed number of principal components to remove if defined. Defaults to undefined.",
     handler = classOf[IntOptionArg])
   var fixedPCToRemove: Option[Int] = None
+
+  @Args4jOption(required = false,
+    name = "-initial_k_fraction",
+    usage = "Set initial k to fraction of max components. Defaults to 0.10.")
+  var initialKFraction: Double = 0.10
 }
 
 class NormalizerArgs extends Args4jBase with NormalizeArgs {
@@ -84,6 +89,12 @@ class NormalizerArgs extends Args4jBase with NormalizeArgs {
     name = "-o",
     usage = "Path to write XHMM normalized, filtered, Z score matrix")
   var outputPath: String = null
+
+  @Args4jOption(required = false,
+    name = "-min_partitions",
+    usage = "Desired minimum number of partitions to be created when reading in XHMM matrix",
+    handler = classOf[IntOptionArg])
+  var minPartitions: Option[Int] = None
 }
 
 class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[NormalizerArgs] {
@@ -94,7 +105,8 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
     val matrix = Deca.readXHMMMatrix(args.inputPath,
       targetsToExclude = args.excludeTargetsPath,
       minTargetLength = args.minTargetLength,
-      maxTargetLength = args.maxTargetLength)
+      maxTargetLength = args.maxTargetLength,
+      minPartitions = args.minPartitions)
 
     val (zRowMatrix, zTargets) = Normalization.normalizeReadDepth(
       matrix,
@@ -104,7 +116,8 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
       maxSampleMeanRD = args.maxSampleMeanRD,
       maxSampleSDRD = args.maxSampleSDRD,
       maxTargetSDRDStar = args.maxTargetSDRDStar,
-      fixedToRemove = args.fixedPCToRemove)
+      fixedToRemove = args.fixedPCToRemove,
+      initialKFraction = args.initialKFraction)
     val zMatrix = ReadDepthMatrix(zRowMatrix, matrix.samples, zTargets)
 
     Deca.writeXHMMMatrix(zMatrix, args.outputPath, label = "Matrix")

@@ -116,12 +116,7 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     var currentCNV: (Int, Int, FixedVector, BigDecimal) = null
 
     for (t <- (0 until obs.length).reverse) {
-      val bwd = if (t == obs.length - 1) {
-        FixedVector.ONES
-      } else {
-        val trans = transProb.matrix(t + 1)
-        trans * (emitDist(t + 1) :* prevBwd)
-      }
+      val bwd = if (t == obs.length - 1) FixedVector.ONES else transProb.matrix(t + 1) * (emitDist(t + 1) :* prevBwd)
       val gamma = fwdCache(t) :* bwd
 
       val kind = gamma.argmax()
@@ -133,13 +128,14 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
         val cnvStart = if (t > 0 || kind == 1) t + 1 else 0 // If we reach target 0 in a CNV
         val (cnvEnd, cnvKind, cnvBwd, stopPhredPr) = currentCNV
 
-        // Compute the various probabilities for the CNV
-        val exactPhredPr = Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, cnvBwd))
+        // Compute the CNV quality scores
         val dipPr = exact_probability(cnvStart, cnvEnd, 1, cnvBwd) // 1 => DIP
         val somePhredPr = Phred.phred(exclude_probability(cnvStart, cnvEnd, excludeType(cnvKind), cnvBwd) - dipPr)
-        val startPhredPr = Phred.phred(start_probability(cnvStart, cnvKind, prevBwd))
 
         if (somePhredPr >= minSomeQuality) {
+          val exactPhredPr = Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, cnvBwd))
+          val startPhredPr = Phred.phred(start_probability(cnvStart, cnvKind, prevBwd))
+
           val cnvAttr = new util.HashMap[String, String]()
           cnvAttr.put("START_TARGET", cnvStart.toString)
           cnvAttr.put("END_TARGET", cnvEnd.toString)

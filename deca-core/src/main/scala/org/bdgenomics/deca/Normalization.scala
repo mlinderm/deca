@@ -5,6 +5,7 @@ import breeze.stats.mean
 import breeze.numerics.sqrt
 import breeze.stats.meanAndVariance
 import org.apache.spark.SparkContext
+import org.apache.spark.mllib.linalg.SingularValueDecomposition
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.deca.Timers._
@@ -12,6 +13,7 @@ import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.util.MLibUtils
 import org.bdgenomics.utils.misc.Logging
 
+import scala.annotation.tailrec
 import scala.util.control.Breaks._
 
 object Normalization extends Serializable with Logging {
@@ -76,56 +78,69 @@ object Normalization extends Serializable with Logging {
     }))
   }
 
-  def predictKFromComponents(maxComponents: Int): Int = {
-    // TODO: Refine prediction function
-    Math.min(Math.ceil(0.05 * maxComponents + 10).toInt, maxComponents)
-  }
-
   def pcaNormalization(readMatrix: IndexedRowMatrix,
                        pveMeanFactor: Double = 0.7,
-                       fixedToRemove: Option[Int] = None): IndexedRowMatrix = PCANormalization.time {
+                       fixedToRemove: Option[Int] = None,
+                       initialKFraction: Double = 0.10): IndexedRowMatrix = PCANormalization.time {
     readMatrix.rows.cache()
 
-    // Determine k for SVD
-    val maxComponents = Math.min(readMatrix.numRows, readMatrix.numCols).toInt
-    val k = fixedToRemove.getOrElse(predictKFromComponents(maxComponents))
-    log.info("Computing SVD with k={}", k)
+    // numRows returns maximum index, not actual number of rows
+    val maxComponents = Math.min(readMatrix.rows.count(), readMatrix.numCols).toInt
+    log.info("Maximum SVD components: {}", maxComponents)
 
-    // Compute SVD
-    val svd = ComputeSVD.time {
-      // May need to convert to RowMatrix and cache for performance reasons
-      readMatrix.computeSVD(k, computeU = false)
-    }
+    val (svd, bigK) = if (fixedToRemove.isDefined) {
+      val bigK: Int = fixedToRemove.get
+      log.info("Computing SVD with k={}", bigK)
+      val svd = ComputeSVD.time {
+        readMatrix.computeSVD(bigK, computeU = false)
+      }
+      (svd, bigK)
+    } else {
+      @tailrec def findK(k: Int): (SingularValueDecomposition[IndexedRowMatrix, org.apache.spark.mllib.linalg.Matrix], Int) = {
+        // Compute SVD
+        log.info("Computing SVD with k={}", k)
+        val svd = ComputeSVD.time {
+          readMatrix.computeSVD(k, computeU = false)
+        }
 
-    // Determine components to remove
-    var toRemove = k
-    if (fixedToRemove.isEmpty) {
-      breakable {
-        val S = MLibUtils.mllibVectorToDenseBreeze(svd.s)
-        val componentVar = S :* S
+        val componentVar = {
+          val S = MLibUtils.mllibVectorToDenseBreeze(svd.s)
+          S :* S
+        }
 
-        // Compute cutoff by extending last value of S to entire length if max components had been calculated
-        val cutoff: Double = pveMeanFactor *
-          ((sum(componentVar) + (maxComponents - componentVar.length) * componentVar(-1)) / maxComponents)
-        for (c <- 0 until componentVar.length) {
-          if (componentVar(c) < cutoff) {
-            toRemove = c
-            break
-          }
+        // estCutoff must be >= than actual cutoff, while minCutoff must be <= actual cutoff
+        val minTotalVar = sum(componentVar)
+        val estCutoff: Double = pveMeanFactor / maxComponents *
+          (minTotalVar + Math.max(maxComponents - componentVar.length - 1, 0) * componentVar(-1))
+        val minCutoff: Double = pveMeanFactor / maxComponents * minTotalVar
+
+        @tailrec def findFirstLessThanCutoff(index: Int): Int = {
+          if (index == componentVar.length || componentVar(index) < estCutoff)
+            return index
+          else
+            return findFirstLessThanCutoff(index + 1)
+        }
+        val bigK = findFirstLessThanCutoff(0)
+
+        // K is index of element one past the last component to be removed
+        if (k == maxComponents || (bigK < componentVar.length && componentVar(bigK) < minCutoff)) {
+          (svd, bigK)
+        } else {
+          log.info("SVD with k={} insufficient to determine K, recomputing.", k)
+          findK(Math.min(2 * k, maxComponents))
         }
       }
 
-      if (toRemove > k) {
-        throw new RuntimeException("Insufficient terms in SVD calculated")
-      }
+      // Default mode where we determine K based on total variance
+      findK(Math.min(Math.ceil(initialKFraction * maxComponents).toInt, maxComponents))
     }
-    log.info("Removing top {} components in PCA normalization", toRemove)
 
+    log.info("Removing top {} components in PCA normalization", bigK)
     val V = MLibUtils.mllibMatrixToDenseBreeze(svd.V)
 
     // Broadcast subset of V matrix
     val sc = SparkContext.getOrCreate()
-    val C = sc.broadcast(V(::, 0 until toRemove)) // Exclusive to toRemove
+    val C = sc.broadcast(V(::, 0 until bigK)) // Exclusive to K
 
     // Remove components with row centric approach
     new IndexedRowMatrix(readMatrix.rows.map(row => {
@@ -149,7 +164,8 @@ object Normalization extends Serializable with Logging {
                          maxSampleSDRD: Double = 150.0,
                          pveMeanFactor: Double = 0.7,
                          fixedToRemove: Option[Int] = None,
-                         maxTargetSDRDStar: Double = 30.0): (IndexedRowMatrix, Array[ReferenceRegion]) = NormalizeReadDepths.time {
+                         maxTargetSDRDStar: Double = 30.0,
+                         initialKFraction: Double = 0.10): (IndexedRowMatrix, Array[ReferenceRegion]) = NormalizeReadDepths.time {
 
     // Filter I: Filter extreme targets and samples, then mean center the data
     val (centeredRdMatrix, targFilteredRdTargets) = ReadDepthFilterI.time {
@@ -175,7 +191,10 @@ object Normalization extends Serializable with Logging {
     log.info("After pre-normalization filter: {} samples by {} targets", centeredRdMatrix.rows.count, targFilteredRdTargets.length)
 
     // PCA normalization
-    val rdStarMatrix = pcaNormalization(centeredRdMatrix, pveMeanFactor = pveMeanFactor, fixedToRemove = fixedToRemove)
+    val rdStarMatrix = pcaNormalization(centeredRdMatrix,
+      pveMeanFactor = pveMeanFactor,
+      fixedToRemove = fixedToRemove,
+      initialKFraction = initialKFraction)
     centeredRdMatrix.rows.unpersist() // Let Spark know centered data no longer needed
 
     // Filter II: Filter extremely variable targets

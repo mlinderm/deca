@@ -49,16 +49,24 @@ class CoveragerArgs extends Args4jBase with CoverageArgs {
 }
 
 class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[CoveragerArgs] {
-
   val companion = Coverager
 
   def run(sc: SparkContext): Unit = {
-
     val readProj = {
       var readFields = Seq(
-        ARF.readMapped, ARF.mapq, ARF.duplicateRead, ARF.failedVendorQualityChecks, ARF.primaryAlignment,
-        ARF.contigName, ARF.start, ARF.end, ARF.cigar,
-        ARF.mateMapped, ARF.mateContigName, ARF.mateAlignmentStart)
+        ARF.readMapped,
+        ARF.duplicateRead,
+        ARF.failedVendorQualityChecks,
+        ARF.primaryAlignment,
+        ARF.mapq,
+        ARF.contigName,
+        ARF.start,
+        ARF.end,
+        ARF.cigar,
+        ARF.mateMapped,
+        ARF.mateContigName,
+        ARF.mateAlignmentStart,
+        ARF.inferredInsertSize)
       Projection(readFields)
     }
 
@@ -74,6 +82,5 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
     var matrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality)
 
     Deca.writeXHMMMatrix(matrix, args.outputPath, label = "DECA._mean_cvg", format = "%.2f")
-
   }
 }

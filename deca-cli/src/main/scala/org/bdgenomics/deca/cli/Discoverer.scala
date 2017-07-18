@@ -1,6 +1,7 @@
 package org.bdgenomics.deca.cli
 
 import org.apache.spark.SparkContext
+import org.bdgenomics.deca.cli.util.{ IntOptionHandler => IntOptionArg }
 import org.bdgenomics.deca.{ Deca, HMM }
 import org.bdgenomics.utils.cli._
 import org.kohsuke.args4j.{ Option => Args4jOption }
@@ -54,13 +55,19 @@ class DiscovererArgs extends Args4jBase with DiscoveryArgs {
     name = "-o",
     usage = "Path to write discovered CNVs as GFF3 file")
   var outputPath: String = null
+
+  @Args4jOption(required = false,
+    name = "-min_partitions",
+    usage = "Desired minimum number of partitions to be created when reading in XHMM matrix",
+    handler = classOf[IntOptionArg])
+  var minPartitions: Option[Int] = None
 }
 
 class Discoverer(protected val args: DiscovererArgs) extends BDGSparkCommand[DiscovererArgs] {
   val companion = Discoverer
 
   def run(sc: SparkContext): Unit = {
-    var matrix = Deca.readXHMMMatrix(args.inputPath)
+    var matrix = Deca.readXHMMMatrix(args.inputPath, minPartitions = args.minPartitions)
     var features = HMM.discoverCNVs(matrix, M = args.M, T = args.T, p = args.p, D = args.D, minSomeQuality = args.minSomeQuality)
     features.saveAsGff3(args.outputPath, asSingleFile = true)
   }

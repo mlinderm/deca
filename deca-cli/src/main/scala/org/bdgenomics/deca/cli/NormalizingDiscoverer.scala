@@ -36,6 +36,12 @@ class NormalizingDiscovererArgs extends Args4jBase with NormalizeArgs with Disco
     usage = "Path to write XHMM normalized, filtered, Z score matrix",
     handler = classOf[StringOptionArg])
   var zScorePath: Option[String] = None
+
+  @Args4jOption(required = false,
+    name = "-min_partitions",
+    usage = "Desired minimum number of partitions to be created when reading in XHMM matrix",
+    handler = classOf[IntOptionArg])
+  var minPartitions: Option[Int] = None
 }
 
 class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) extends BDGSparkCommand[NormalizingDiscovererArgs] {
@@ -45,7 +51,8 @@ class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) exten
     val matrix = Deca.readXHMMMatrix(args.inputPath,
       targetsToExclude = args.excludeTargetsPath,
       minTargetLength = args.minTargetLength,
-      maxTargetLength = args.maxTargetLength)
+      maxTargetLength = args.maxTargetLength,
+      minPartitions = args.minPartitions)
 
     val (zRowMatrix, zTargets) = Normalization.normalizeReadDepth(
       matrix,
@@ -55,7 +62,8 @@ class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) exten
       maxSampleMeanRD = args.maxSampleMeanRD,
       maxSampleSDRD = args.maxSampleSDRD,
       maxTargetSDRDStar = args.maxTargetSDRDStar,
-      fixedToRemove = args.fixedPCToRemove)
+      fixedToRemove = args.fixedPCToRemove,
+      initialKFraction = args.initialKFraction)
 
     matrix.unpersist()
 

@@ -62,9 +62,19 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
     // 1. Read alignment files
     val readProj = {
       var readFields = Seq(
-        ARF.readMapped, ARF.mapq, ARF.duplicateRead, ARF.failedVendorQualityChecks, ARF.primaryAlignment,
-        ARF.contigName, ARF.start, ARF.end, ARF.cigar,
-        ARF.mateMapped, ARF.mateContigName, ARF.mateAlignmentStart)
+        ARF.readMapped,
+        ARF.duplicateRead,
+        ARF.failedVendorQualityChecks,
+        ARF.primaryAlignment,
+        ARF.mapq,
+        ARF.contigName,
+        ARF.start,
+        ARF.end,
+        ARF.cigar,
+        ARF.mateMapped,
+        ARF.mateContigName,
+        ARF.mateAlignmentStart,
+        ARF.inferredInsertSize)
       Projection(readFields)
     }
 
@@ -97,7 +107,8 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
       minSampleMeanRD = args.minSampleMeanRD,
       maxSampleMeanRD = args.maxSampleMeanRD,
       maxSampleSDRD = args.maxSampleSDRD,
-      maxTargetSDRDStar = args.maxTargetSDRDStar)
+      maxTargetSDRDStar = args.maxTargetSDRDStar,
+      initialKFraction = args.initialKFraction)
 
     rdMatrix.unpersist() // Read matrix no longer needed
 

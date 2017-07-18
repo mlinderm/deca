@@ -31,11 +31,13 @@ import org.bdgenomics.utils.misc.Logging
 
 object Deca extends Serializable with Logging {
 
+  // Default value based on: https://github.com/mesos/spark/pull/718
   def readXHMMMatrix(filePath: String,
                      targetsToExclude: Option[String] = None,
-                     minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue): ReadDepthMatrix = ReadXHMMMatrix.time {
+                     minTargetLength: Long = 0, maxTargetLength: Long = Long.MaxValue,
+                     minPartitions: Option[Int] = None): ReadDepthMatrix = ReadXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
-    val lines = sc.textFile(filePath)
+    val lines = sc.textFile(filePath, minPartitions = minPartitions.getOrElse(sc.defaultMinPartitions))
     lines.cache()
 
     // Read header line with the targets into ReferenceRegions
