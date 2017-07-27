@@ -240,7 +240,7 @@ object Coverage extends Serializable with Logging {
 
     val coverageCoordinates = TargetCoverage.time {
       val coverageCoordinatesPerSample = readRdds.zipWithIndex.map {
-        case (readsRdd, sampleIdx) => {
+        case (readsRdd, sampleIdx) => PerSampleTargetCoverage.time {
           // Read filtering
           val filteredReadsRdd = readsRdd.transform(rdd => rdd.filter(read => {
             !read.getDuplicateRead &&

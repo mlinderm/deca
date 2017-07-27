@@ -27,13 +27,12 @@ trait CoverageArgs {
     name = "-min_mapping_quality",
     usage = "Minimum mapping quality for read to count towards coverage. Defaults to 20.")
   var minMappingQuality: Int = 20
-
 }
 
 class CoveragerArgs extends Args4jBase with CoverageArgs {
   @Args4jOption(required = true,
     name = "-I",
-    usage = "One or more BAM, Parquet or other alignment files",
+    usage = "One or more BAM, Parquet or other alignment files, or a list of alignment files",
     handler = classOf[StringArrayOptionHandler])
   var readsPaths: Array[String] = null
 
@@ -46,12 +45,21 @@ class CoveragerArgs extends Args4jBase with CoverageArgs {
     name = "-o",
     usage = "Path to write XHMM read depth matrix")
   var outputPath: String = null
+
+  @Args4jOption(required = false,
+    name = "-l",
+    usage = "Input file is a list of paths")
+  var readPathIsList: Boolean = false
 }
 
 class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[CoveragerArgs] {
   val companion = Coverager
 
   def run(sc: SparkContext): Unit = {
+    if (args.readPathIsList) {
+      args.readsPaths = sc.textFile(args.readsPaths.head).collect
+    }
+
     val readProj = {
       var readFields = Seq(
         ARF.readMapped,
@@ -72,7 +80,7 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
 
     val readsRdds = args.readsPaths.map(path => {
       // TODO: Add push down filters
-      log.info("Loading {}", path)
+      log.info("Loading {} alignment file", path)
       sc.loadAlignments(path, projection = Some(readProj), stringency = ValidationStringency.SILENT)
     })
 

@@ -53,6 +53,11 @@ class CNVerArgs extends Args4jBase with CoverageArgs with NormalizeArgs with Dis
     usage = "Path to write XHMM normalized, filtered, Z score matrix",
     handler = classOf[StringOptionArg])
   var zScorePath: Option[String] = None
+
+  @Args4jOption(required = false,
+    name = "-l",
+    usage = "Input file is a list of paths")
+  var readPathIsList: Boolean = false
 }
 
 class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
@@ -60,6 +65,10 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
 
   def run(sc: SparkContext): Unit = {
     // 1. Read alignment files
+    if (args.readPathIsList) {
+      args.readsPaths = sc.textFile(args.readsPaths.head).collect
+    }
+
     val readProj = {
       var readFields = Seq(
         ARF.readMapped,
@@ -80,7 +89,7 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
 
     val readsRdds = args.readsPaths.map(path => {
       // TODO: Add push down filters
-      log.info("Loading {}", path)
+      log.info("Loading {} alignment file", path)
       sc.loadAlignments(path, projection = Some(readProj), stringency = ValidationStringency.SILENT)
     })
 
