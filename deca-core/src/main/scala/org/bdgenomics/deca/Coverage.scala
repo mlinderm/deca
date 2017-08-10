@@ -198,8 +198,8 @@ object Coverage extends Serializable with Logging {
     })
   }
 
-  def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Int, (Int, Double))], numSamples: Long, numTargets: Long): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {
-    val indexedRows = coverageCoordinates.groupByKey(numSamples.toInt).map {
+  def coverageMatrixFromCoordinates(coverageCoordinates: RDD[(Int, (Int, Double))], numSamples: Long, numTargets: Long, numPartitions: Option[Int] = None): IndexedRowMatrix = CoverageCoordinatesToMatrix.time {
+    val indexedRows = coverageCoordinates.groupByKey(numPartitions.getOrElse(numSamples.toInt)).map {
       case (sampleIdx, targetCovg) =>
         var perTargetCoverage = DenseVector.zeros[Double](numTargets.toInt)
         targetCovg.foreach { case (targetIdx, covg) => perTargetCoverage(targetIdx) = covg; }
@@ -208,7 +208,7 @@ object Coverage extends Serializable with Logging {
     new IndexedRowMatrix(indexedRows, numSamples, numTargets.toInt)
   }
 
-  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0): ReadDepthMatrix = ComputeReadDepths.time {
+  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0, numPartitions: Option[Int] = None): ReadDepthMatrix = ComputeReadDepths.time {
     // Sequence dictionary parsing is broken in current ADAM release:
     //    https://github.com/bigdatagenomics/adam/issues/1409
     // which breaks the desired sorting of the targets. Upgrading to a newer version of ADAM did not fix the issues as
@@ -260,7 +260,7 @@ object Coverage extends Serializable with Logging {
       sc.union(coverageCoordinatesPerSample)
     }
 
-    val rdMatrix = coverageMatrixFromCoordinates(coverageCoordinates, numSamples, numTargets)
+    val rdMatrix = coverageMatrixFromCoordinates(coverageCoordinates, numSamples, numTargets, numPartitions = numPartitions)
     ReadDepthMatrix(rdMatrix, samplesDriver, targetsDriver)
   }
 

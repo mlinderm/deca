@@ -58,6 +58,12 @@ class CNVerArgs extends Args4jBase with CoverageArgs with NormalizeArgs with Dis
     name = "-l",
     usage = "Input file is a list of paths")
   var readPathIsList: Boolean = false
+
+  @Args4jOption(required = false,
+    name = "-num_partitions",
+    usage = "Desired number of partitions for read matrix. Defaults to number of samples.",
+    handler = classOf[IntOptionArg])
+  var numPartitions: Option[Int] = None
 }
 
 class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
@@ -99,8 +105,7 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
     }
 
     // 2. Compute coverage
-    val rdMatrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality)
-
+    val rdMatrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality, numPartitions = args.numPartitions)
     readsRdds.foreach(_.rdd.unpersist()) // Alignments no longer needed
 
     args.zScorePath.foreach(path => {
