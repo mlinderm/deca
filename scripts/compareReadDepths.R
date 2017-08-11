@@ -9,10 +9,12 @@ parser$add_argument("DECA.RD.txt", nargs=1, help="DECA read matrix")
 args <- parser$parse_args()
 
 gatk <- read.table(args$XHMM.RD.txt, header=T, row.names=1)
-gatk <- gatk[order(rownames(gatk)),]
-
 deca <- read.table(args$DECA.RD.txt, header=T, row.names=1)
-deca <- deca[order(rownames(deca)),]
+
+samp <- sort(intersect(rownames(gatk), rownames(deca)))
+
+gatk <- gatk[samp,]
+deca <- deca[samp,]
 
 diff <- tbl_df(gatk-deca)
 diff %<>% rownames_to_column("SAMPLE") %>% gather(TARGET, DELTA, -SAMPLE)

@@ -156,7 +156,9 @@ deca-submit \
 -o DECA.RD.txt
 ```
 
-followed by the command above (with `DECA.RD.txt` as the input).
+followed by the `normalize_and_discovery` command above (with `DECA.RD.txt` as the input). DECA's coverage calculation is 
+designed to match the output GATK DepthOfCoverage command specified in the XHMM protocol, i.e. count fragment depth with 
+no minimum base quality.
 
 # License
 

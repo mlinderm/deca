@@ -1,11 +1,11 @@
 package org.bdgenomics.deca
 
-import breeze.linalg.DenseVector
+import breeze.linalg.{ DenseVector, sum }
 import org.apache.spark.SparkContext
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.apache.spark.rdd.RDD
-import org.bdgenomics.adam.models.{ ReferenceRegion }
+import org.bdgenomics.adam.models.ReferenceRegion
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
 import org.bdgenomics.adam.rich.RichAlignmentRecord
@@ -25,15 +25,6 @@ import scala.util.control.Breaks._
 /**
  * Created by mlinderman on 3/8/17.
  */
-
-case class CoverageByTarget(targetId: Int, coverage: Double) {
-}
-
-object CoverageByTarget {
-  def apply(target: (ReferenceRegion, Int), coverage: Long): CoverageByTarget = {
-    new CoverageByTarget(targetId = target._2, coverage = coverage.toDouble / target._1.length)
-  }
-}
 
 private[deca] class PotentialMateOverlap(names: HashMap[String, AlignmentRecord], targets: MultiMap[String, Int]) {
   def this() = this(new mutable.HashMap[String, AlignmentRecord], new mutable.HashMap[String, Set[Int]] with MultiMap[String, Int])
@@ -76,7 +67,31 @@ object Coverage extends Serializable with Logging {
         }
         cigarSegmentStart += cigar.getLength
       } else if (op.consumesReferenceBases) {
-        cigarSegmentStart += cigar.getLength; // Need to distinguish between soft clip and insertion
+        cigarSegmentStart += cigar.getLength;
+      }
+    })
+
+    pileup
+  }
+
+  private def perBaseCoverageOfRegion(region: ReferenceRegion, pileup: DenseVector[Int], read: RichAlignmentRecord): DenseVector[Int] = {
+    // "Clip" bases when the insert size is shorter than the read length
+    val insert = read.getInferredInsertSize
+    val regionStart = if (insert != null && insert < 0) max(region.start, read.getEnd + insert - 1) else region.start
+    val regionEnd = if (insert != null && insert > 0) min(region.end, read.getStart + insert + 1) else region.end
+
+    var cigarSegmentStart = read.getStart
+    read.samtoolsCigar.foreach(cigar => {
+      val op = cigar.getOperator
+      if (op.consumesReadBases && op.consumesReferenceBases) {
+        val idxStart: Int = (max(regionStart, cigarSegmentStart) - region.start).toInt
+        val idxEnd: Int = (min(regionEnd, cigarSegmentStart + cigar.getLength) - region.start).toInt
+        for (pos <- idxStart until idxEnd) {
+          pileup(pos) = pileup(pos) + 1
+        }
+        cigarSegmentStart += cigar.getLength
+      } else if (op.consumesReferenceBases) {
+        cigarSegmentStart += cigar.getLength;
       }
     })
 
@@ -84,9 +99,18 @@ object Coverage extends Serializable with Logging {
   }
 
   def fragmentOverlap(region: ReferenceRegion, read1: RichAlignmentRecord, read2: RichAlignmentRecord): Long = {
-    // TODO: Account for deletions
-    val overlap = min(min(region.end, read1.getEnd), read2.getEnd) - max(max(region.start, read1.getStart), read2.getStart)
-    if (overlap > 0) overlap else 0
+    var pileup = DenseVector.zeros[Int](region.length.toInt)
+
+    pileup = perBaseCoverageOfRegion(region, pileup, read1)
+    pileup = perBaseCoverageOfRegion(region, pileup, read2)
+
+    var trueOverlap: Long = 0
+    for (i <- 0 until pileup.length) {
+      if (pileup(i) == 2)
+        trueOverlap += 1
+    }
+
+    trueOverlap
   }
 
   private def queryGreaterThanOther(query: ReferenceRegion, other: ReferenceRegion): Boolean = {
@@ -141,7 +165,7 @@ object Coverage extends Serializable with Logging {
           return firstIndex
         else {
           val targetRegion = targetsArray(targetIndex)._1
-          if (readOverlapsTarget(read, targetRegion)) { //ReferenceRegion.unstranded(read).covers(targetRegion)) {
+          if (readOverlapsTarget(read, targetRegion)) {
 
             coverageByTarget(targetIndex) += totalCoverageOfRegion(targetRegion, read)
             if (mateOverlap) {
