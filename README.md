@@ -83,7 +83,7 @@ $ deca-submit normalize_and_discover --help
 ## Using native library algebra libraries
 
 Apache Spark includes the [Netlib-Java](https://github.com/fommil/netlib-java) library for high-performance linear algebra. 
-Netlib-Java can invoke optimized BLAS and Lapack system libraries if available, however, many Spark distributions are built 
+Netlib-Java can invoke optimized BLAS and Lapack system libraries if available; however, many Spark distributions are built 
 without Netlib-Java system library support. You may be able to use system libraries by including the DECA jar on 
 the Spark driver classpath, e.g.
 
@@ -99,18 +99,21 @@ WARN  BLAS:61 - Failed to load implementation from: com.github.fommil.netlib.Nat
 WARN  BLAS:61 - Failed to load implementation from: com.github.fommil.neltlib.NativeRefARPACK
 ```
 
-# Example usage with XHMM tutorial data
+# Example Usage 
+
+## Running DECA in "stand-alone" mode on a workstation
 
 A small dataset (30 samples by 300 targets) is distributed as part of the [XHMM tutorial](http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml). 
-Using [pre-computed read-depth matrix and related files](http://atgu.mgh.harvard.edu/xhmm/RUN.zip) you could call CNVs 
-(on a 16-core workstation with 128 GB RAM) with the following command:
+Using [pre-computed read-depth matrix and related files](http://atgu.mgh.harvard.edu/xhmm/RUN.zip) the DECA command to call CNVs 
+(on a 16-core workstation with 128 GB RAM) is:
 
 ```dtd
 deca-submit \
 --master local[16] \
 --driver-class-path $DECA_JAR \
 --conf spark.local.dir=/data/scratch/$USER \
---conf spark.driver.maxResultSize=0 
+--conf spark.driver.maxResultSize=0 \
+--conf spark.kryo.registrationRequired=true \
 --executor-memory 96G --driver-memory 16G \
 -- normalize_and_discover \
 -min_some_quality 29.5 \
@@ -128,7 +131,7 @@ The resulting [GFF3](https://github.com/The-Sequence-Ontology/Specifications/blo
 
 The `exlude_targets.txt` file is the unique combination of the `extreme_gc_targets.txt` and `low_complexity_targets.txt` 
 files provided in the tutorial data. The `min_some_quality` parameter is set to 29.5 to mimic XHMM behavior which uses a 
-minimum SOME quality of 30 after rounding (while DECA applies the filter prior to rounding). Depending on your particular
+default minimum SOME quality of 30 *after* rounding (while DECA applies the filter prior to rounding). Depending on your particular
 computing environment, you may need to modify the [spark-submit](https://spark.apache.org/docs/latest/submitting-applications.html) 
 [configuration parameters](https://spark.apache.org/docs/latest/configuration.html). `spark.driver.maxResultSize` is set to 0 (unlimited) 
 to address errors collecting larger amounts of data to the driver.
@@ -149,6 +152,7 @@ deca-submit \
 --driver-class-path $DECA_JAR \
 --conf spark.local.dir=/data/scratch/$USER \
 --conf spark.driver.maxResultSize=0 \
+--conf spark.kryo.registrationRequired=true \
 --executor-memory 96G --driver-memory 16G \
 -- coverage \
 -L EXOME.interval_list \
@@ -157,22 +161,52 @@ deca-submit \
 ```
 
 followed by the `normalize_and_discovery` command above (with `DECA.RD.txt` as the input). DECA's coverage calculation is 
-designed to match the output GATK DepthOfCoverage command specified in the XHMM protocol, i.e. count fragment depth with 
-no minimum base quality.
+designed to match the output of the GATK DepthOfCoverage command specified in the XHMM protocol, i.e. count fragment depth with 
+zero minimum base quality.
 
-# Running DECA
+## Running DECA on a YARN cluster
 
-We provide Toil workflows (Vivian et al., 2017) that allow DECA to be run either
+The equivalent example command to call CNVs on a YARN cluster with Spark dynamic allocation would be:
+
+```
+deca-submit \
+	--master yarn \
+	--deploy-mode cluster \
+	--num-executors 1 \
+	--executor-memory 72G \
+	--executor-cores 5 \
+	--driver-memory 72G \
+	--driver-cores 5 \
+	--conf spark.driver.maxResultSize=0 \
+	--conf spark.yarn.executor.memoryOverhead=4096 \
+	--conf spark.yarn.driver.memoryOverhead=4096 \
+	--conf spark.kryo.registrationRequired=true \
+	--conf spark.hadoop.mapreduce.input.fileinputformat.split.minsize=$(( 8 * 1024 * 1024 )) \
+	--conf spark.default.parallelism=10 \
+	--conf spark.dynamicAllocation.enabled=true \
+	-- normalize_and_discover \
+	-min_partitions 10 \
+	-exclude_targets <path-to-exclude-file> \
+	-min_some_quality 29.5 \
+	-I <path-to-read-depth-matrix> \
+	-o <path-to-save-cnv-calls>
+```
+
+Note that many of the parameters above, e.g. driver and executor cores and memory, are specific to a particular cluster 
+environment and would likely need to be modified for other environments.
+
+## Running DECA using Toil on a workstation or AWS
+
+We provide [Toil](http://www.ncbi.nlm.nih.gov/pubmed/28398314) workflows that allow DECA to be run either
 on a local computer or on a cluster on the Amazon Web Services (AWS) cloud.
 These workflows are written in Python and package DECA, Apache Spark, and Apache
-Hadoop using Docker containers. This packaging eliminates the need to understand
-how to setup an Apache Spark cluster, and thus reduces the barrier-to-entry for
+Hadoop using Docker containers. This packaging automates the setup of Apache Spark, reducing the barrier-to-entry for
 using DECA. To run either workflow, the user will need to [install
 Toil](http://toil.readthedocs.io/en/3.10.1/gettingStarted/install.html#basic-installation).
 To run the AWS workflow, the user will additionally need to follow the AWS setup
 instructions.
 
-## Installing the DECA Workflows
+### Installing the DECA Workflows
 
 Once Toil has been installed, the user will need to download and install the
 [bdgenomics.workflows](https://github.com/bigdatagenomics/workflows) package,
@@ -189,7 +223,7 @@ should be run inside of the same virtualenv that Toil was installed into. If run
 on AWS, this step should be run inside of a virtualenv that was created on the
 Toil AWS autoscaling cluster.
 
-## Input Files
+### Input Files
 
 The DECA workflow takes two inputs:
 
@@ -203,7 +237,7 @@ The DECA workflow takes two inputs:
    supported. S3a is an overlay over the AWS Simple Storage System (S3) cloud
    data store which is provided by Apache Hadoop.
 
-## Running Locally
+### Running Locally
 
 To run locally, we invoke the following command:
 
@@ -223,7 +257,7 @@ temporary directory where Toil will save intermediate files. The
 `<memory-in-GB>` parameter should be specified without units; e.g., to allocate
 20GB of memory, pass "--memory 20".
 
-## Running on AWS
+### Running on AWS
 
 To run on AWS, we rely on Toil’s AWS provisioner, which starts a cluster on the
 AWS cloud. Toil’s AWS provisioner runs on top of [Apache
@@ -264,8 +298,7 @@ bdg-deca \
                                                                                                                                
 Toil will launch a cluster with `spark-workers + 2` worker nodes to run this
 workflow. For optimal performance, we recommend choosing a number of Apache
-Spark worker nodes such that you have no less than 256MB of data per core. As
-described in Section 4.2, all file paths used in AWS mode must be files stored
+Spark worker nodes such that you have no less than 256MB of data per core. All file paths used in AWS mode must be files stored
 in AWS’s S3 storage system, and must have an s3a:// URI scheme.
                                                                                                                               
 # License
