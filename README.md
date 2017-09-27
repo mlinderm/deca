@@ -104,8 +104,8 @@ WARN  BLAS:61 - Failed to load implementation from: com.github.fommil.neltlib.Na
 ## Running DECA in "stand-alone" mode on a workstation
 
 A small dataset (30 samples by 300 targets) is distributed as part of the [XHMM tutorial](http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml). 
-Using [pre-computed read-depth matrix and related files](http://atgu.mgh.harvard.edu/xhmm/RUN.zip) the DECA command to call CNVs 
-(on a 16-core workstation with 128 GB RAM) is:
+An example DECA command to call CNVs from the [pre-computed read-depth matrix and related files](http://atgu.mgh.harvard.edu/xhmm/RUN.zip)  
+on a 16-core workstation with 128 GB RAM is below. Note that you will need to set the `DECA_JAR` environment variable, set `spark.local.dir` to a suitable temporary directory for your system and likely need to change the executor and driver memory to suitable values for your system. The `exclude_targets.txt` and `DATA.RD.txt` files from the XHMM tutorial data are also distributed as part of the DECA test resources in the `deca-core/src/test/resources/` directory.
 
 ```dtd
 deca-submit \
