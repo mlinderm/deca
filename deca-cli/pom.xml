@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.bdgenomics.deca</groupId>
     <artifactId>deca-parent_2.11</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.1-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>deca-cli_2.11</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.1.1-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>deca-cli: Command line interface for a distributed variant caller</name>
 
@@ -147,6 +147,10 @@
   </build>
 
   <dependencies>
+    <dependency>
+      <groupId>net.fnothaft</groupId>
+      <artifactId>jsr203-s3a</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.bdgenomics.utils</groupId>
       <artifactId>utils-cli-spark2_2.11</artifactId>
