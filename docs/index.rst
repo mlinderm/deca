@@ -63,5 +63,11 @@ pip <http://bdg-workflows.readthedocs.io/en/latest/gettingStarted/install.html#b
 
    running/calling-cnvs
 
+.. toctree::
+   :caption: Benchmarking
+   :maxdepth: 2
+
+   benchmarking/benchmarking
+
 * :ref:`genindex`
 * :ref:`search`
