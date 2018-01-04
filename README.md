@@ -104,14 +104,22 @@ WARN  BLAS:61 - Failed to load implementation from: com.github.fommil.neltlib.Na
 ## Running DECA in "stand-alone" mode on a workstation
 
 A small dataset (30 samples by 300 targets) is distributed as part of the [XHMM tutorial](http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml). 
-An example DECA command to call CNVs from the [pre-computed read-depth matrix and related files](http://atgu.mgh.harvard.edu/xhmm/RUN.zip)  
-on a 16-core workstation with 128 GB RAM is below. Note that you will need to set the `DECA_JAR` environment variable, set `spark.local.dir` to a suitable temporary directory for your system and likely need to change the executor and driver memory to suitable values for your system. The `exclude_targets.txt` and `DATA.RD.txt` files from the XHMM tutorial data are also distributed as part of the DECA test resources in the `deca-core/src/test/resources/` directory.
+An example DECA command to call CNVs from the [pre-computed read-depth matrix and related files](http://atgu.mgh.harvard.edu/xhmm/RUN.zip)
+on a 16-core workstation with 128 GB RAM is below. Note that you will need to set the `DECA_JAR` environment variable to point to the jar file created by `mvn package`, set `spark.local.dir` to a suitable temporary directory for your system and likely need to change the executor and driver memory to suitable values for your system. The `exclude_targets.txt` and `DATA.RD.txt` files from the XHMM tutorial data are also distributed as part of the DECA test resources in the `deca-core/src/test/resources/` directory.
+
+From within the unzip'd RUN directory, prepare `exclude_targets.txt`:
+
+```
+cat low_complexity_targets.txt extreme_gc_targets.txt | sort -u > exclude_targets.txt
+```
+
+then run DECA:
 
 ```dtd
 deca-submit \
 --master local[16] \
 --driver-class-path $DECA_JAR \
---conf spark.local.dir=/data/scratch/$USER \
+--conf spark.local.dir=/path/to/temp/directory \
 --conf spark.driver.maxResultSize=0 \
 --conf spark.kryo.registrationRequired=true \
 --executor-memory 96G --driver-memory 16G \
@@ -150,7 +158,7 @@ To call CNVs from the original [BAM files](http://atgu.mgh.harvard.edu/xhmm/EXAM
 deca-submit \
 --master local[16] \
 --driver-class-path $DECA_JAR \
---conf spark.local.dir=/data/scratch/$USER \
+--conf spark.local.dir=/path/to/temp/directory \
 --conf spark.driver.maxResultSize=0 \
 --conf spark.kryo.registrationRequired=true \
 --executor-memory 96G --driver-memory 16G \
@@ -186,10 +194,10 @@ deca-submit \
 	--conf spark.dynamicAllocation.enabled=true \
 	-- normalize_and_discover \
 	-min_partitions 10 \
-	-exclude_targets <path-to-exclude-file> \
+	-exclude_targets "hdfs://path/to/exclude_targets.txt" \
 	-min_some_quality 29.5 \
-	-I <path-to-read-depth-matrix> \
-	-o <path-to-save-cnv-calls>
+	-I "hdfs://path/to/DATA.RD.txt" \
+	-o "hdfs://path/to/DECA.gff3"
 ```
 
 Note that many of the parameters above, e.g. driver and executor cores and memory, are specific to a particular cluster 
