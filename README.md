@@ -160,6 +160,8 @@ HG00121 DEL     22:18898402-18913235    14.83   22      18905818        104..117
 HG00113 DUP     22:17071768-17073440    1.67    22      17072604        4..11   8       25      99      99      53      25      4.00    197.73
 ```
 
+View a [recording](https://youtu.be/ADWasnNuRvk) of the above installation and CNV calling workflow executed on OSX.
+
 To call CNVs from the original [BAM files](http://atgu.mgh.harvard.edu/xhmm/EXAMPLE_BAMS.zip):
 
 ```dtd
