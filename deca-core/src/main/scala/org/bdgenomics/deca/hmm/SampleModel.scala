@@ -90,6 +90,26 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     fwd
   }
 
+  lazy val hiddenCache = {
+    val backPointers = Array.ofDim[(Int, Int, Int)](obs.length)
+    var prevFwd = FixedVector(p, 1 - 2 * p, p) :* emitDist(0)
+    for (t <- 1 until obs.length) {
+      val incoming = prevFwd :* transProb.matrix(t) // 3x3 matrix with columns as incoming edges to x_t
+      val backPointer = incoming.colArgMax()
+      val fwd = FixedVector(incoming(backPointer._1, 0), incoming(backPointer._2, 1), incoming(backPointer._3, 2)) :* emitDist(t)
+
+      backPointers(t) = backPointer
+      prevFwd = fwd
+    }
+
+    val hidden = Array.ofDim[Int](obs.length)
+    hidden(obs.length - 1) = prevFwd.argmax()
+    for (t <- (0 until obs.length - 1).reverse) {
+      hidden(t) = backPointers(t + 1).productElement(hidden(t + 1)).asInstanceOf[Int]
+    }
+    hidden
+  }
+
   lazy val totalLikelihood = fwdCache(obs.length - 1).sum()
 
   def exact_probability(t1: Int, t2: Int, kind: Int, bwd: FixedVector): BigDecimal = {
@@ -134,9 +154,10 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
 
     for (t <- (0 until obs.length).reverse) {
       val bwd = if (t == obs.length - 1) FixedVector.ONES else transProb.matrix(t + 1) * (emitDist(t + 1) :* prevBwd)
-      val gamma = fwdCache(t) :* bwd
+      //val gamma = fwdCache(t) :* bwd
 
-      val kind = gamma.argmax()
+      //val kind = gamma.argmax()
+      val kind = hiddenCache(t)
       if (kind != 1 && currentCNV == null) {
         // Start of a new CNV
         currentCNV = (t, kind, bwd, Phred.phred(stop_probability(t, kind, prevBwd)))

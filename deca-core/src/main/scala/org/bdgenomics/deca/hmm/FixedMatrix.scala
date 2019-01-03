@@ -58,6 +58,31 @@ class FixedMatrix(
       v2_0 * that.v0 + v2_1 * that.v1 + v2_2 * that.v2)
   }
 
+  def colArgMax(): (Int, Int, Int) = {
+    val col0 = {
+      if (v0_0 >= v1_0) {
+        if (v0_0 >= v2_0) 0 else 2
+      } else {
+        if (v1_0 >= v2_0) 1 else 2
+      }
+    }
+    val col1 = {
+      if (v0_1 >= v1_1) {
+        if (v0_1 >= v2_1) 0 else 2
+      } else {
+        if (v1_1 >= v2_1) 1 else 2
+      }
+    }
+    val col2 = {
+      if (v0_2 >= v1_2) {
+        if (v0_2 >= v2_2) 0 else 2
+      } else {
+        if (v1_2 >= v2_2) 1 else 2
+      }
+    }
+    (col0, col1, col2)
+  }
+
   def toArray(): Array[BigDecimal] = {
     Array(v0_0, v1_0, v2_0, v0_1, v1_1, v2_1, v0_2, v1_2, v2_2)
   }

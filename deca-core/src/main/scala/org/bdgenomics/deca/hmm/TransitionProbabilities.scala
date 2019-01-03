@@ -55,6 +55,15 @@ class TransitionProbabilities(val f: Array[Double], val p: Double, val q: Double
         throw new IndexOutOfBoundsException(xt_1 + " or " + xt + " not in 0-2")
     }
   }
+
+  def to(t: Int, xt: Int): FixedVector = {
+    val ft = f(t)
+    if (xt == 0) return new FixedVector(ft * (1 - q) + (1 - ft) * p, p, (1 - ft) * p)
+    else if (xt == 1) return new FixedVector(ft * q + (1 - ft) * (1 - 2 * p), 1 - 2 * p, ft * q + (1 - ft) * (1 - 2 * p))
+    else if (xt == 2) return new FixedVector((1 - ft) * p, p, ft * (1 - q) + (1 - ft) * p)
+    else
+      throw new IndexOutOfBoundsException(xt + " not in 0-2")
+  }
 }
 
 object TransitionProbabilities {
