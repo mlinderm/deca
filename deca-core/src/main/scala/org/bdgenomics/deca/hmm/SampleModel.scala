@@ -41,6 +41,11 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     FixedVector(delDist.density(my_obs), dipDist.density(my_obs), dupDist.density(my_obs))
   }
 
+  private def logEmitDist(t: Int): FixedDoubleVector = {
+    val my_obs = obs(t)
+    FixedDoubleVector(delDist.logDensity(my_obs), dipDist.logDensity(my_obs), dupDist.logDensity(my_obs))
+  }
+
   private def emitDist(t: Int, kind: Int): Double = {
     val my_obs = obs(t)
     kind match {
@@ -78,26 +83,29 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     }
   }
 
-  lazy val (fwdCache, hiddenCache) = {
+  lazy val fwdCache = {
     val fwd = Array.ofDim[FixedVector](obs.length)
-    val backPointers = Array.ofDim[(Int, Int, Int)](obs.length)
 
     fwd(0) = FixedVector(p, 1 - 2 * p, p) :* emitDist(0)
-    var prevVit = fwd(0)
     for (t <- 1 until obs.length) {
-      val trans = transProb.matrix(t)
-      val emit = emitDist(t)
-
       // Compute forward algorithm
-      fwd(t) = (fwd(t - 1) * trans) :* emit
+      fwd(t) = (fwd(t - 1) * transProb.matrix(t)) :* emitDist(t)
+    }
 
-      // Compute Viterbi algorithm
-      val incoming = prevVit :* trans // 3x3 matrix with columns as incoming edges to x_t
-      val backPointer = incoming.colArgMax()
-      val vit = FixedVector(incoming(backPointer._1, 0), incoming(backPointer._2, 1), incoming(backPointer._3, 2)) :* emit
+    fwd
+  }
 
-      backPointers(t) = backPointer
-      prevVit = vit
+  lazy val hiddenCache = {
+    val backPointers = Array.ofDim[(Int, Int, Int)](obs.length)
+    var prevVit = FixedDoubleVector(math.log(p), math.log(1 - 2 * p), math.log(p)) :+ logEmitDist(0)
+    for (t <- 1 until obs.length) {
+      val emit = logEmitDist(t)
+      val (vt_0, incoming_0) = FixedDoubleVector.argmaxSum(prevVit, transProb.logTo(t, 0), emit.v0)
+      val (vt_1, incoming_1) = FixedDoubleVector.argmaxSum(prevVit, transProb.logTo(t, 1), emit.v1)
+      val (vt_2, incoming_2) = FixedDoubleVector.argmaxSum(prevVit, transProb.logTo(t, 2), emit.v2)
+
+      backPointers(t) = (incoming_0, incoming_1, incoming_2)
+      prevVit = FixedDoubleVector(vt_0, vt_1, vt_2)
     }
 
     val hidden = Array.ofDim[Int](obs.length)
@@ -105,8 +113,7 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     for (t <- (0 until obs.length - 1).reverse) {
       hidden(t) = backPointers(t + 1).productElement(hidden(t + 1)).asInstanceOf[Int]
     }
-
-    (fwd, hidden)
+    hidden
   }
 
   lazy val totalLikelihood = fwdCache(obs.length - 1).sum()

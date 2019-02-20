@@ -64,6 +64,16 @@ class TransitionProbabilities(val f: Array[Double], val p: Double, val q: Double
     else
       throw new IndexOutOfBoundsException(xt + " not in 0-2")
   }
+
+  def logTo(t: Int, xt: Int): FixedDoubleVector = {
+    val ft = f(t)
+    xt match {
+      case 0 => new FixedDoubleVector(math.log(ft * (1 - q) + (1 - ft) * p), math.log(p), math.log((1 - ft) * p))
+      case 1 => new FixedDoubleVector(math.log(ft * q + (1 - ft) * (1 - 2 * p)), math.log(1 - 2 * p), math.log(ft * q + (1 - ft) * (1 - 2 * p)))
+      case 2 => new FixedDoubleVector(math.log((1 - ft) * p), math.log(p), math.log(ft * (1 - q) + (1 - ft) * p))
+      case _ => throw new IndexOutOfBoundsException(xt + " not in 0-2")
+    }
+  }
 }
 
 object TransitionProbabilities {
