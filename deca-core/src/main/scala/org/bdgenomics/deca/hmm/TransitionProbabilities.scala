@@ -39,6 +39,19 @@ class TransitionProbabilities(val f: Array[Double], val p: Double, val q: Double
     }
   }
 
+  def doubleMatrix(t: Int): FixedDoubleMatrix = {
+    if (t == 0) {
+      new FixedDoubleMatrix(0, p, 0, 0, 1 - 2 * p, 0, 0, p, 0)
+    } else {
+      val ft = f(t)
+      // Matrices are initialized in column order
+      new FixedDoubleMatrix(
+        v0_0 = ft * (1 - q) + (1 - ft) * p, v1_0 = p, v2_0 = (1 - ft) * p,
+        v0_1 = ft * q + (1 - ft) * (1 - 2 * p), v1_1 = 1 - 2 * p, v2_1 = ft * q + (1 - ft) * (1 - 2 * p),
+        v0_2 = (1 - ft) * p, v1_2 = p, v2_2 = ft * (1 - q) + (1 - ft) * p)
+    }
+  }
+
   def edge(t: Int, xt_1: Int, xt: Int): Double = {
     val ft = f(t)
     (xt_1, xt) match {
@@ -54,6 +67,10 @@ class TransitionProbabilities(val f: Array[Double], val p: Double, val q: Double
       case (_, _) =>
         throw new IndexOutOfBoundsException(xt_1 + " or " + xt + " not in 0-2")
     }
+  }
+
+  def logEdge(t: Int, xt_1: Int, xt: Int): Double = {
+    math.log(edge(t, xt_1, xt))
   }
 
   def to(t: Int, xt: Int): FixedVector = {

@@ -27,7 +27,7 @@ class FixedDoubleVector(val v0: Double, val v1: Double, val v2: Double) {
     i match {
       case 0 => v0
       case 1 => v1
-      case 3 => v2
+      case 2 => v2
       case _ => throw new IndexOutOfBoundsException(i + " not in 0-2")
     }
   }
@@ -44,6 +44,17 @@ class FixedDoubleVector(val v0: Double, val v1: Double, val v2: Double) {
     v0 * that.v0 + v1 * that.v1 + v2 * that.v2
   }
 
+  def *(that: FixedDoubleMatrix): FixedDoubleVector = {
+    new FixedDoubleVector(
+      v0 * that.v0_0 + v1 * that.v1_0 + v2 * that.v2_0,
+      v0 * that.v0_1 + v1 * that.v1_1 + v2 * that.v2_1,
+      v0 * that.v0_2 + v1 * that.v1_2 + v2 * that.v2_2)
+  }
+
+  def /(that: Double): FixedDoubleVector = {
+    new FixedDoubleVector(v0 / that, v1 / that, v2 / that)
+  }
+
   def sum(): Double = v0 + v1 + v2
 
   def argmax(): Int = {
@@ -53,9 +64,17 @@ class FixedDoubleVector(val v0: Double, val v1: Double, val v2: Double) {
       if (v1 >= v2) 1 else 2
     }
   }
+
+  override def toString = {
+    s"FixedDoubleVector(${v0},${v1},${v2})"
+  }
 }
 
 object FixedDoubleVector {
+  def apply(v: Double): FixedDoubleVector = {
+    new FixedDoubleVector(v, v, v)
+  }
+
   def apply(v0: Double, v1: Double, v2: Double): FixedDoubleVector = {
     new FixedDoubleVector(v0, v1, v2)
   }
@@ -73,5 +92,4 @@ object FixedDoubleVector {
 
   val ZEROS = FixedDoubleVector(0.0, 0.0, 0.0)
   val ONES = FixedDoubleVector(1.0, 1.0, 1.0)
-
 }
