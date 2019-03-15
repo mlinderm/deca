@@ -174,7 +174,8 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     for (t <- t1 + 1 to t2) {
       prob += transProb.logEdge(t, kind, kind) + logEmitDist(t, kind)
     }
-    var missing_c = 0.0
+    // When t1 == t2, the scaling factor will get double counted
+    var missing_c = if (t1 == t2) -math.log(fwdScalingFactorCache(t1)) else 0
     for (t <- t1 + 1 until t2) {
       missing_c += math.log(fwdScalingFactorCache(t))
     }
@@ -244,7 +245,7 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
 
     // Compute backward probabilities without backward caching while looking for CNVs
     var scaledPrevBwd = FixedDoubleVector(1 / fwdScalingFactorCache(obs.length - 1))
-    var currentCNV: (Int, Int, FixedDoubleVector, Double) = null
+    var scaledCurrentCNV: (Int, Int, FixedDoubleVector, Double) = null
 
     for (t <- (0 until obs.length).reverse) {
       //val bwd = if (t == obs.length - 1) FixedVector.ONES else transProb.matrix(t + 1) * (emitDist(t + 1) :* prevBwd)
@@ -255,13 +256,13 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
       }
       val kind = hiddenCache(t)
 
-      if (kind != 1 && currentCNV == null) {
+      if (kind != 1 && scaledCurrentCNV == null) {
         // Start of a new CNV
-        currentCNV = (t, kind, scaledBwd, Phred.phred(stop_probability(t, kind, scaledPrevBwd)))
-      } else if (currentCNV != null && (kind != currentCNV._2 || t == 0)) {
+        scaledCurrentCNV = (t, kind, scaledBwd, Phred.phred(stop_probability(t, kind, scaledPrevBwd)))
+      } else if (scaledCurrentCNV != null && (kind != scaledCurrentCNV._2 || t == 0)) {
         // End of a CNV and possibly the start of another
         val cnvStart = if (t > 0 || kind == 1) t + 1 else 0 // If we reach target 0 in a CNV
-        val (cnvEnd, cnvKind, scaledCNVBwd, stopPhredPr) = currentCNV
+        val (cnvEnd, cnvKind, scaledCNVBwd, stopPhredPr) = scaledCurrentCNV
 
         // Compute the CNV quality scores
         val dipPr = exact_probability(cnvStart, cnvEnd, 1, scaledCNVBwd) // 1 => DIP
@@ -289,7 +290,7 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
         }
 
         // Are we back to diploid, or did we start another different CNV
-        currentCNV = if (kind != 1) (t, kind, scaledBwd, Phred.phred(stop_probability(t, kind, scaledPrevBwd))) else null
+        scaledCurrentCNV = if (kind != 1) (t, kind, scaledBwd, Phred.phred(stop_probability(t, kind, scaledPrevBwd))) else null
       }
 
       scaledPrevBwd = scaledBwd
