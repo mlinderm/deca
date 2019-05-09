@@ -122,8 +122,7 @@ The specific command when running DECA on Databricks is below.
 ]
 ```
 
-The `20130108.exome.targets.exclude.txt` file is the concatenation
-`20130108.exome.targets.gc.txt` and `20130108.exome.targets.lc.txt` files,
+The `20130108.exome.targets.exclude.txt` file is the concatenation of `20130108.exome.targets.gc.txt` and `20130108.exome.targets.lc.txt` files,
 which are in turn generated from `20130108.exome.targets.interval_list` as
 described in the [XHMM
 tutorial](http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml).
