@@ -221,16 +221,25 @@ Note that unlike HDFS, S3 is an eventually-consistent filesystem and so you may 
 
 DECA has been tested with emr-5.13. Clusters can be created with the command-line tools or the AWS management console. A JSON file `emr_config.json` is provided in the scripts directory to configure clusters for maximum resource utilization.
 
-A bootstrap script `emr_bootstrap.sh` is provided in the scripts directory for use as a [bootstrap action](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-bootstrap.html). The bootstrap script can copy a pre-built JAR onto the cluster (faster) or build DECA directly from GitHub (slower). To use the bootstrap script, copy it to S3 and provide the S3 path as the bootstrap action when creating the cluster. To copy a pre-built JAR onto the cluster provide a s3 path to the DECA CLI jar, e.g. `s3://path/to/deca-cli_2.11-0.2.1-SNAPSHOT.jar`, as the optional argument to bootstrap action. After connecting to the EMR master node via SSH, you can launch DECA as you would on any YARN cluster. For example the following command calls CNVs in the entire 1000 Genomes phase 3 cohort on a cluster.
+A bootstrap script `emr_bootstrap.sh` is provided in the scripts directory for use as a [bootstrap action](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-bootstrap.html). The bootstrap script can copy a pre-built JAR onto the cluster (faster) or build DECA directly from GitHub (slower). To use the bootstrap script, copy it to S3 and provide the S3 path as the bootstrap action when creating the cluster. To copy a pre-built JAR onto the cluster provide a s3 path to the DECA CLI jar, e.g. `s3://path/to/deca-cli_2.11-0.2.1-SNAPSHOT.jar`, as the optional argument to bootstrap action. After connecting to the EMR master node via SSH, you can launch DECA as you would on any YARN cluster. For example the following command calls CNVs in the entire 1000 Genomes phase 3 cohort on a cluster of i3.2xlarge nodes.
 
 ```
 deca-submit \
     --master yarn \
     --deploy-mode cluster \
+    --num-executors 7 \
+    --executor-memory 22G \
+    --executor-cores 4 \
+    --driver-memory 22G \
+    --driver-cores 5 \
     --conf spark.driver.maxResultSize=0 \
     --conf spark.kryo.registrationRequired=true \
     --conf spark.dynamicAllocation.enabled=false \
+    --conf spark.hadoop.mapreduce.input.fileinputformat.split.minsize=$(( 104 * 1024 * 1024 )) \
+    --conf spark.default.parallelism=28 \
+    --conf spark.executor.extraJavaOptions="-XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=35" \
     -- normalize_and_discover \
+    -min_partitions 28 \
     -exclude_targets "s3a://path/to/20130108.exome.targets.exclude.txt" \
     -min_some_quality 29.5 \
     -print_metrics \
@@ -245,15 +254,14 @@ Alternately jobs can be launched as steps on cluster. In this approach, no boots
 --class org.bdgenomics.deca.cli.DecaMain
 --conf spark.serializer=org.apache.spark.serializer.KryoSerializer
 --conf spark.kryo.registrator=org.bdgenomics.deca.serialization.DECAKryoRegistrator
---conf spark.kryo.registrationRequired=true
---conf spark.driver.maxResultSize=0
 ```
 
-and the application arguments would be
+(in addition to the arguments shown above) and the application arguments would be
 
 ```
 normalize_and_discover
--exclude_targets s3a://databricks-deca/20130108.exome.targets.exclude.txt
+-min_partitions 28
+-exclude_targets s3a://path/to/20130108.exome.targets.exclude.txt
 -min_some_quality 29.5
 -print_metrics
 -I s3a://path/to/DATA.2535.RD.txt
@@ -263,7 +271,7 @@ normalize_and_discover
 
 ## Running DECA on Databricks
 
-DECA can readily be run on [Databricks](https://databricks.com) on the Amazon cloud. DECA has been tested on Databricks 4.1 as a spark-submit job using the DECA jar fetched from a S3 bucket. As with EMR, data can be read from and written to S3 using the s3a:// scheme. The Databricks cluster was configured to access S3 via [AWS IAM roles](https://docs.databricks.com/administration-guide/cloud-configurations/aws/iam-roles.html#secure-access-to-s3-buckets-using-iam-roles). Note that access to any public buckets, e.g. the 1000genomes bucket, must also be included in the cross account IAM role created according to the above instructions. The same issues with eventual consistency described above also apply when writing data to S3 from the Databricks cluster.
+DECA can readily be run on [Databricks](https://databricks.com) on the Amazon cloud. DECA has been tested on Databricks Light 2.4 as a spark-submit job using the DECA jar fetched from a S3 bucket. As with EMR, data can be read from and written to S3 using the s3a:// scheme. The Databricks cluster was configured to access S3 via [AWS IAM roles](https://docs.databricks.com/administration-guide/cloud-configurations/aws/iam-roles.html#secure-access-to-s3-buckets-using-iam-roles). Note that access to any public buckets, e.g. the 1000genomes bucket, must also be included in the cross account IAM role created according to the above instructions. The same issues with eventual consistency described above also apply when writing data to S3 from the Databricks cluster.
 
 An example configuration for call CNVs directly from the original BAM files:
 

@@ -63,6 +63,10 @@ class FixedVector(val v0: BigDecimal, val v1: BigDecimal, val v2: BigDecimal) {
       if (v1 >= v2) 1 else 2
     }
   }
+
+  override def toString() = {
+    s"FixedVector(${v0},${v1},${v2})"
+  }
 }
 
 object FixedVector {
